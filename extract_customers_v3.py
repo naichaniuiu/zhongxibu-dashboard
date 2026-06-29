@@ -86,14 +86,14 @@ for r in load_rows('D:/432664yjxt1782693742441.xlsx'):
     c['total_debt'] += debt
     c['orders'] += 1
 
-# 2. 欠款数据：按欠款文件重新计算账龄
+# 2. 欠款数据：只统计 2026 年业绩日期的欠款，重新计算账龄
 print('Processing debt data...')
 for r in load_rows('D:/集团采购-分销业绩表_20260628.xlsx'):
     dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
     if dept1 not in ('中西部大区', '华中大区（已封存）', '西南大区（已封存）'):
         continue
     d = parse_date(r.get('业绩日期'))
-    if not d:
+    if not d or d.year != 2026:
         continue
     debt_val = to_wan(r.get('欠款金额'))
     if debt_val <= 0:

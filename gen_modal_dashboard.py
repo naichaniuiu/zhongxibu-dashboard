@@ -28,6 +28,7 @@ total = {
     'yoy': kpi['total_yoy'] if kpi['total_yoy'] is not None else None,
     'sales': kpi['total_active_sellers'],
     'total_debt': debt_kpi['total'],
+    'overdue': debt_kpi.get('overdue', debt_kpi['d30_90'] + debt_kpi['d90_180'] + debt_kpi['d180']),
     'd30': debt_kpi['d30'],
     'd30_90': debt_kpi['d30_90'],
     'd90_180': debt_kpi['d90_180'],
@@ -354,8 +355,8 @@ html = f'''<!DOCTYPE html>
         <div class="kpi-card">
             <div class="kpi-icon">⚠️</div>
             <h3>逾期欠款总额</h3>
-            <div class="value negative">{total['total_debt']:.2f}<span style="font-size:0.5em;">万</span></div>
-            <div class="sub">90天以上：{total['d90_180']+total['d180']:.2f}万</div>
+            <div class="value negative">{total['overdue']:.2f}<span style="font-size:0.5em;">万</span></div>
+            <div class="sub">总欠款：{total['total_debt']:.2f}万 | 90天以上：{total['d90_180']+total['d180']:.2f}万</div>
         </div>
     </div>
 
@@ -418,7 +419,7 @@ html = f'''<!DOCTYPE html>
                     <div class="kpi-icon">📋</div>
                     <h3>欠款总额</h3>
                     <div class="value negative">{total['total_debt']:.2f}<span style="font-size:0.5em;">万</span></div>
-                    <div class="sub">全大区逾期欠款合计</div>
+                    <div class="sub">全大区欠款合计</div>
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-icon">🟢</div>

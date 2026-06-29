@@ -10,11 +10,14 @@ from collections import defaultdict, Counter
 #   1) 业绩数据：D:/432664yjxt1782693742441.xlsx
 #   2) 认款数据：D:/432664rkdxtbb1782694290617.xlsx
 #   3) 欠款数据：D:/集团采购-分销业绩表_20260628.xlsx
+#   4) 25Q1 数据：D:/25财年Q1数据.xlsx
 # ============================================================
 
 TODAY = datetime(2026, 6, 29)  # 数据基准日
 Q1_START = datetime(2026, 4, 1)
 Q1_END = datetime(2026, 6, 30)
+Q1_START_25 = datetime(2025, 4, 1)
+Q1_END_25 = datetime(2025, 6, 30)
 TARGET_TOTAL = 5586.0  # 万元，沿用旧看板目标
 BLACKLIST = {'支振岗', '李国栋', '白雨'}
 KEEP_LIST = {'张宸睿'}
@@ -98,7 +101,26 @@ for r in load_rows('D:/432664yjxt1782693742441.xlsx'):
 print(f'  Performance records: {len(perf_records)}')
 
 # ============================================================
-# 2. 读取欠款数据（历史欠款，含华中/西南封存大区）
+# 2. 读取 25 财年 Q1 业绩数据（用于同比）
+# ============================================================
+print('Loading 25Q1 performance data...')
+perf_records_25 = []
+for r in load_rows('D:/25财年Q1数据.xlsx'):
+    dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
+    if dept1 not in DEPT_MAP:
+        continue
+    d = parse_date(r.get('业绩日期'))
+    if not d or not (Q1_START_25 <= d <= Q1_END_25):
+        continue
+    perf_records_25.append({
+        'dept': str(r.get('二级部门') or '其他').strip().replace('\t', ''),
+        'seller_name': str(r.get('销售员名称') or '').strip().replace('\t', ''),
+        'perf': to_wan(r.get('业绩总金额')),
+    })
+print(f'  25Q1 performance records: {len(perf_records_25)}')
+
+# ============================================================
+# 3. 读取欠款数据（2026 年业绩日期的欠款）
 # ============================================================
 print('Loading debt data...')
 debt_records = []
@@ -107,7 +129,7 @@ for r in load_rows('D:/集团采购-分销业绩表_20260628.xlsx'):
     if dept1 not in DEPT_MAP:
         continue
     d = parse_date(r.get('业绩日期'))
-    if not d:
+    if not d or d.year != 2026:
         continue
     debt_val = to_wan(r.get('欠款金额'))
     if debt_val <= 0:
@@ -127,10 +149,10 @@ for r in load_rows('D:/集团采购-分销业绩表_20260628.xlsx'):
         'debt': debt_val,
         'days': days,
     })
-print(f'  Debt records: {len(debt_records)}')
+print(f'  Debt records (2026): {len(debt_records)}')
 
 # ============================================================
-# 3. 读取认款数据，计算回款周期
+# 4. 读取认款数据，计算回款周期
 # ============================================================
 print('Loading payment data...')
 # 建立业绩单号 -> 部门 映射
@@ -171,7 +193,7 @@ avg_cycle = weighted_avg(cycle_records)
 print(f'  Payment records for cycle: {len(cycle_records)}, avg cycle: {avg_cycle:.1f}')
 
 # ============================================================
-# 4. 销售员维度聚合（用于弹窗下钻）
+# 5. 销售员维度聚合（用于弹窗下钻）
 # ============================================================
 print('Aggregating by seller...')
 
@@ -229,7 +251,7 @@ sales_detail_data = dict(sales_detail_data)
 sales_cycle_detail = dict(sales_cycle_detail)
 
 # ============================================================
-# 5. 计算 KPI
+# 6. 计算 KPI
 # ============================================================
 print('Calculating KPIs...')
 
@@ -239,22 +261,26 @@ total_debt = sum(r['debt'] for r in debt_records)
 
 total_completion = round(total_perf / TARGET_TOTAL * 100, 1) if TARGET_TOTAL > 0 else 0.0
 
-# 在职销售员：从业绩 + 欠款文件提取，剔除黑名单，保留白名单
-active_sellers = set()
+# 在职销售员：26Q1 有实际业绩（>0）的在职销售员，剔除黑名单
+seller_perf_q1 = defaultdict(float)
 for r in perf_records:
-    if r['seller_status'] == '在职':
-        active_sellers.add(r['seller_name'])
-for r in debt_records:
-    if r['seller_status'] == '在职':
-        active_sellers.add(r['seller_name'])
-active_sellers = (active_sellers - BLACKLIST) | KEEP_LIST
+    if r['seller_status'] == '在职' and r['perf'] > 0:
+        seller_perf_q1[r['seller_name']] += r['perf']
+
+active_sellers = set(seller_perf_q1.keys()) - BLACKLIST
 active_seller_count = len(active_sellers)
 
-# 账龄分布
+# 25Q1 总业绩
+total_perf_25 = sum(r['perf'] for r in perf_records_25)
+total_yoy = round((total_perf - total_perf_25) / total_perf_25 * 100, 1) if total_perf_25 > 0 else None
+
+# 账龄分布（2026 年欠款）
 d30 = sum(r['debt'] for r in debt_records if r['days'] <= 30)
 d30_90 = sum(r['debt'] for r in debt_records if 30 < r['days'] <= 90)
 d90_180 = sum(r['debt'] for r in debt_records if 90 < r['days'] <= 180)
 d180 = sum(r['debt'] for r in debt_records if r['days'] > 180)
+# 逾期欠款：>30 天
+d_overdue = d30_90 + d90_180 + d180
 debt_d90_plus = d90_180 + d180
 
 # 高风险客户：欠款 > 50 万 或 账龄 > 90 天
@@ -271,10 +297,11 @@ high_risk_customers.sort(key=lambda x: (-x['debt'], -x['days']))
 high_risk_customers = high_risk_customers[:50]
 
 # ============================================================
-# 6. 按部门（二级部门）聚合
+# 7. 按部门（二级部门）聚合
 # ============================================================
 print('Aggregating by department...')
 
+# 26Q1 部门业绩
 dept_perf = defaultdict(lambda: {'perf': 0.0, 'collect': 0.0, 'sales': set(), 'orders': set()})
 for r in perf_records:
     d = dept_perf[r['dept']]
@@ -283,6 +310,12 @@ for r in perf_records:
     d['sales'].add(r['seller_name'])
     d['orders'].add(r['order_no'])
 
+# 25Q1 部门业绩
+dept_perf_25 = defaultdict(float)
+for r in perf_records_25:
+    dept_perf_25[r['dept']] += r['perf']
+
+# 2026 年部门欠款
 dept_debt = defaultdict(lambda: {'d30': 0.0, 'd30_90': 0.0, 'd90_180': 0.0, 'd180': 0.0, 'total_debt': 0.0})
 for r in debt_records:
     d = dept_debt[r['dept']]
@@ -306,19 +339,21 @@ else:
         target_ratio[dept] = 0.0
 
 # 合并部门数据
-all_depts = set(dept_perf.keys()) | set(dept_debt.keys())
+all_depts = set(dept_perf.keys()) | set(dept_debt.keys()) | set(dept_perf_25.keys())
 dept_data = []
 for dept in sorted(all_depts):
     p = dept_perf.get(dept, {'perf': 0.0, 'collect': 0.0, 'sales': set(), 'orders': set()})
     d = dept_debt.get(dept, {'d30': 0.0, 'd30_90': 0.0, 'd90_180': 0.0, 'd180': 0.0, 'total_debt': 0.0})
+    v25 = dept_perf_25.get(dept, 0.0)
     target = TARGET_TOTAL * target_ratio.get(dept, 0.0)
     completion = round(p['perf'] / target * 100, 1) if target > 0 else 0.0
+    yoy = round((p['perf'] - v25) / v25 * 100, 1) if v25 > 0 else None
     cycle = weighted_avg(dept_cycle_items.get(dept, []))
     dept_data.append({
         'dept': dept,
         'v26': round(p['perf'], 2),
-        'v25': None,
-        'yoy': None,
+        'v25': round(v25, 2) if v25 > 0 else None,
+        'yoy': yoy,
         'target': round(target, 2),
         'completion': completion,
         'sales': len(p['sales']),
@@ -349,7 +384,7 @@ else:
 over90_depts = [d['dept'] for d in cycles_with_data if d['cycle'] > 90]
 
 # ============================================================
-# 7. 输出 dashboard_data.json
+# 8. 输出 dashboard_data.json
 # ============================================================
 print('Writing dashboard_data.json...')
 
@@ -363,16 +398,18 @@ dashboard_data = {
         'performance': '432664yjxt1782693742441.xlsx',
         'payment': '432664rkdxtbb1782694290617.xlsx',
         'debt': '集团采购-分销业绩表_20260628.xlsx',
+        'perf25': '25财年Q1数据.xlsx',
     },
     'kpi': {
         'total_perf26': round(total_perf, 2),
         'total_target': TARGET_TOTAL,
         'total_completion': total_completion,
-        'total_yoy': None,
-        'total_perf25': None,
+        'total_yoy': total_yoy,
+        'total_perf25': round(total_perf_25, 2),
         'total_active_sellers': active_seller_count,
         'total_debt': round(total_debt, 2),
         'debt_d90_plus': round(debt_d90_plus, 2),
+        'total_overdue': round(d_overdue, 2),
     },
     'debt_kpi': {
         'total': round(total_debt, 2),
@@ -382,6 +419,7 @@ dashboard_data = {
         'd30_90_ratio': round(d30_90 / total_debt * 100, 1) if total_debt > 0 else 0.0,
         'd90_180': round(d90_180, 2),
         'd180': round(d180, 2),
+        'overdue': round(d_overdue, 2),
     },
     'cycle_kpi': {
         'avg_cycle': round(avg_cycle, 1),
@@ -403,4 +441,4 @@ with open(os.path.join(base_dir, 'dashboard_data.json'), 'w', encoding='utf-8') 
     json.dump(dashboard_data, f, ensure_ascii=False, indent=2)
 
 print('Done.')
-print(f'KPI: 业绩 {total_perf:.2f} 万, 目标 {TARGET_TOTAL} 万, 完成率 {total_completion}%, 在职 {active_seller_count} 人, 欠款 {total_debt:.2f} 万')
+print(f'KPI: 业绩 {total_perf:.2f} 万, 25Q1 {total_perf_25:.2f} 万, 同比 {total_yoy}%, 目标 {TARGET_TOTAL} 万, 完成率 {total_completion}%, 在职 {active_seller_count} 人, 欠款 {total_debt:.2f} 万, 逾期 {d_overdue:.2f} 万')
