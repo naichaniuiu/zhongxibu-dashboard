@@ -72,6 +72,9 @@ for r in load_rows('D:/432664yjxt1782693742441.xlsx'):
     d = parse_date(r.get('业绩日期'))
     if not d or not (Q1_START <= d <= Q1_END):
         continue
+    is_b = str(r.get('是否核算B端业绩') or '').strip().replace('\t', '')
+    if is_b == '否':
+        continue
     dept = str(r.get('二级部门') or '其他').strip().replace('\t', '')
     seller = str(r.get('销售员名称') or '').strip().replace('\t', '')
     customer = str(r.get('客户名称') or '').strip().replace('\t', '') or '未知客户'
@@ -86,8 +89,16 @@ for r in load_rows('D:/432664yjxt1782693742441.xlsx'):
     c['total_debt'] += debt
     c['orders'] += 1
 
-# 2. 欠款数据：只统计 2026 年业绩日期的欠款，重新计算账龄
+# 2. 欠款数据：只统计 2026 年业绩日期的欠款，按业绩单号聚合剔除正负相抵为 0 的订单
 print('Processing debt data...')
+# 先按业绩单号聚合
+order_debt = defaultdict(lambda: {
+    'debt': 0.0,
+    'date': None,
+    'dept': '',
+    'seller': '',
+    'customer': '',
+})
 for r in load_rows('D:/集团采购-分销业绩表_20260628.xlsx'):
     dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
     if dept1 not in ('中西部大区', '华中大区（已封存）', '西南大区（已封存）'):
@@ -95,15 +106,29 @@ for r in load_rows('D:/集团采购-分销业绩表_20260628.xlsx'):
     d = parse_date(r.get('业绩日期'))
     if not d or d.year != 2026:
         continue
-    debt_val = to_wan(r.get('欠款金额'))
-    if debt_val <= 0:
+    order_no = str(r.get('业绩单号') or '').strip().replace('\t', '')
+    if not order_no:
         continue
-    dept = str(r.get('二级部门') or '其他').strip().replace('\t', '')
-    seller = str(r.get('销售员名称') or '').strip().replace('\t', '')
-    customer = str(r.get('客户名称') or '').strip().replace('\t', '') or '未知客户'
-    days = (TODAY - d).days
+    od = order_debt[order_no]
+    od['debt'] += to_wan(r.get('欠款金额'))
+    # 记录最早的业绩日期及客户/销售员信息
+    if od['date'] is None or d < od['date']:
+        od['date'] = d
+        od['dept'] = str(r.get('二级部门') or '其他').strip().replace('\t', '')
+        od['seller'] = str(r.get('销售员名称') or '').strip().replace('\t', '')
+        od['customer'] = str(r.get('客户名称') or '').strip().replace('\t', '') or '未知客户'
+
+# 只保留净额 > 0 的订单，并分配到客户
+for order_no, od in order_debt.items():
+    if od['debt'] <= 0:
+        continue
+    days = (TODAY - od['date']).days
     if days < 0:
         days = 0
+    dept = od['dept']
+    seller = od['seller']
+    customer = od['customer']
+    debt_val = od['debt']
     
     c = result[dept][seller][customer]
     c['customer'] = customer

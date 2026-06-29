@@ -85,6 +85,9 @@ for r in load_rows('D:/432664yjxt1782693742441.xlsx'):
     d = parse_date(r.get('业绩日期'))
     if not d or not (Q1_START <= d <= Q1_END):
         continue
+    is_b = str(r.get('是否核算B端业绩') or '').strip().replace('\t', '')
+    if is_b == '否':
+        continue
     perf_records.append({
         'date': d,
         'order_no': str(r.get('业绩单号') or '').strip().replace('\t', ''),
@@ -112,6 +115,9 @@ for r in load_rows('D:/25财年Q1数据.xlsx'):
     d = parse_date(r.get('业绩日期'))
     if not d or not (Q1_START_25 <= d <= Q1_END_25):
         continue
+    is_b = str(r.get('是否核算B端业绩') or '').strip().replace('\t', '')
+    if is_b == '否':
+        continue
     perf_records_25.append({
         'dept': str(r.get('二级部门') or '其他').strip().replace('\t', ''),
         'seller_name': str(r.get('销售员名称') or '').strip().replace('\t', ''),
@@ -120,10 +126,11 @@ for r in load_rows('D:/25财年Q1数据.xlsx'):
 print(f'  25Q1 performance records: {len(perf_records_25)}')
 
 # ============================================================
-# 3. 读取欠款数据（2026 年业绩日期的欠款）
+# 3. 读取欠款数据（2026 年业绩日期的欠款，按业绩单号聚合，剔除正负相抵为 0 的订单）
 # ============================================================
 print('Loading debt data...')
-debt_records = []
+# 按业绩单号聚合
+debt_by_order = {}
 for r in load_rows('D:/集团采购-分销业绩表_20260628.xlsx'):
     dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
     if dept1 not in DEPT_MAP:
@@ -131,25 +138,38 @@ for r in load_rows('D:/集团采购-分销业绩表_20260628.xlsx'):
     d = parse_date(r.get('业绩日期'))
     if not d or d.year != 2026:
         continue
-    debt_val = to_wan(r.get('欠款金额'))
-    if debt_val <= 0:
+    order_no = str(r.get('业绩单号') or '').strip().replace('\t', '')
+    if not order_no:
         continue
-    days = (TODAY - d).days
+    if order_no not in debt_by_order:
+        debt_by_order[order_no] = {
+            'date': d,
+            'order_no': order_no,
+            'customer_id': str(r.get('客户编号') or '').strip().replace('\t', ''),
+            'customer_name': str(r.get('客户名称') or '').strip().replace('\t', ''),
+            'seller_no': str(r.get('销售员工号') or '').strip().replace('\t', ''),
+            'seller_name': str(r.get('销售员名称') or '').strip().replace('\t', ''),
+            'seller_status': str(r.get('销售员状态') or '').strip().replace('\t', ''),
+            'dept': str(r.get('二级部门') or '其他').strip().replace('\t', ''),
+            'debt': 0.0,
+        }
+    debt_by_order[order_no]['debt'] += to_wan(r.get('欠款金额'))
+    # 取该订单最早的业绩日期用于计算账龄
+    if d < debt_by_order[order_no]['date']:
+        debt_by_order[order_no]['date'] = d
+
+# 只保留净额 > 0 的订单
+debt_records = []
+for rec in debt_by_order.values():
+    if rec['debt'] <= 0:
+        continue
+    days = (TODAY - rec['date']).days
     if days < 0:
         days = 0
-    debt_records.append({
-        'date': d,
-        'order_no': str(r.get('业绩单号') or '').strip().replace('\t', ''),
-        'customer_id': str(r.get('客户编号') or '').strip().replace('\t', ''),
-        'customer_name': str(r.get('客户名称') or '').strip().replace('\t', ''),
-        'seller_no': str(r.get('销售员工号') or '').strip().replace('\t', ''),
-        'seller_name': str(r.get('销售员名称') or '').strip().replace('\t', ''),
-        'seller_status': str(r.get('销售员状态') or '').strip().replace('\t', ''),
-        'dept': str(r.get('二级部门') or '其他').strip().replace('\t', ''),
-        'debt': debt_val,
-        'days': days,
-    })
-print(f'  Debt records (2026): {len(debt_records)}')
+    rec['days'] = days
+    debt_records.append(rec)
+
+print(f'  Debt orders (2026): {len(debt_records)}')
 
 # ============================================================
 # 4. 读取认款数据，计算回款周期
@@ -169,6 +189,9 @@ for r in load_rows('D:/432664rkdxtbb1782694290617.xlsx'):
     order_no = str(r.get('业绩单号') or '').strip().replace('\t', '')
     dept = order_to_dept.get(order_no)
     if not dept:
+        continue
+    is_b = str(r.get('是否核算B端业绩') or '').strip().replace('\t', '')
+    if is_b == '否':
         continue
     perf_date = parse_date(r.get('业绩日期'))
     pay_date = parse_date(r.get('回款日期'))
@@ -267,7 +290,7 @@ for r in perf_records:
     if r['seller_status'] == '在职' and r['perf'] > 0:
         seller_perf_q1[r['seller_name']] += r['perf']
 
-active_sellers = set(seller_perf_q1.keys()) - BLACKLIST
+active_sellers = (set(seller_perf_q1.keys()) - BLACKLIST) | KEEP_LIST
 active_seller_count = len(active_sellers)
 
 # 25Q1 总业绩
