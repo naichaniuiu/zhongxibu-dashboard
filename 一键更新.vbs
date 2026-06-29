@@ -1,4 +1,4 @@
-﻿' ============================================================
+' ============================================================
 '  Zhongxibu Dashboard - One-Click Update + Auto Push to GitHub
 '  Double-click this file to: Read Excel -> Generate HTML -> Push to GitHub
 '  Managers just visit: https://naichaniuiu.github.io/zhongxibu-dashboard/
@@ -20,7 +20,7 @@ gitExe = "C:\Users\wm881\.workbuddy\vendor\PortableGit\bin\git.exe"
 logFilePath = strPath & "\update_log.txt"
 
 ' Step 1: Check Excel file
-excelPath = "C:\Users\wm881\Downloads\业绩 欠款看板.xlsx"
+excelPath = "C:\Users\wm881\Downloads\ҵ�� Ƿ���.xlsx"
 If Not fso.FileExists(excelPath) Then
     MsgBox "ERROR: Excel file not found!" & vbCrLf & vbCrLf & "Please download the Excel file to:" & vbCrLf & excelPath, vbCritical, "Update Failed"
     WScript.Quit 1
