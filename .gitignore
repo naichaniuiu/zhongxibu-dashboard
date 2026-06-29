@@ -9,3 +9,4 @@ update_log.txt
 # OS files
 Thumbs.db
 .DS_Store
+debug.log
