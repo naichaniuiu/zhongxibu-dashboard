@@ -1306,20 +1306,20 @@
         "rec_weighted": 94799562.0
       },
       {
-        "name": "罗贝",
-        "debt_amt": 89.34,
-        "rec_amt": 56.39,
-        "cycle": 48.5,
-        "debt_weighted": 30386883.0,
-        "rec_weighted": 40320600.0
-      },
-      {
         "name": "胡松",
         "debt_amt": 279.22,
         "rec_amt": 187.94,
         "cycle": 48.5,
         "debt_weighted": 105114095.0,
         "rec_weighted": 121313014.0
+      },
+      {
+        "name": "罗贝",
+        "debt_amt": 89.34,
+        "rec_amt": 56.39,
+        "cycle": 48.5,
+        "debt_weighted": 30386883.0,
+        "rec_weighted": 40320600.0
       },
       {
         "name": "陶迪",
