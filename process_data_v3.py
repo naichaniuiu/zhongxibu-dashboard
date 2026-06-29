@@ -31,6 +31,76 @@ DEPT_MAP = {
 }
 
 
+# ============================================================
+# 部门映射规则（二级部门 & 三级部门）
+# ============================================================
+INTERNET_SELLERS = set()
+
+
+def scan_internet_sellers(path):
+    """扫描文件中原始部门为武汉通讯互联网的销售员，用于后续按销售员归属映射。"""
+    for r in load_rows(path):
+        dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
+        if dept1 not in DEPT_MAP:
+            continue
+        dept2 = str(r.get('二级部门') or '').strip().replace('\t', '')
+        sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
+        if '通讯互联网' in dept2 or '通讯互联网' in sub_dept:
+            seller = str(r.get('销售员名称') or '').strip().replace('\t', '')
+            if seller:
+                INTERNET_SELLERS.add(seller)
+
+
+def normalize_dept2(dept2, sub_dept, seller_name):
+    """根据二级部门、三级部门和销售员名称归一化二级部门。"""
+    dept2 = str(dept2 or '其他').strip().replace('\t', '')
+    sub_dept = str(sub_dept or '').strip().replace('\t', '')
+    seller = str(seller_name or '').strip().replace('\t', '')
+
+    # 武汉通讯互联网：先按销售员归属拆分（适用于该销售员的所有记录）
+    if seller in INTERNET_SELLERS:
+        if seller in ('吴晗', '李国栋'):
+            return '混营销区'
+        return '湖北营销区'
+    # 再按原始部门名称匹配（兼容数据未归集到销售员的情况）
+    if '通讯互联网' in dept2 or '通讯互联网' in sub_dept:
+        if seller in ('吴晗', '李国栋'):
+            return '混营销区'
+        return '湖北营销区'
+
+    # 武汉金融 / 武汉能源交通 / 武汉基建制造 → 湖北营销区
+    if dept2 in ('武汉金融', '武汉能源交通', '武汉基建制造') or \
+       sub_dept in ('武汉金融行业组', '武汉能源交通行业组', '武汉基建制造行业组'):
+        return '湖北营销区'
+
+    # 四川 / 重庆营销区 → 综合管理办公室
+    if dept2 in ('四川营销区', '重庆营销区'):
+        return '综合管理办公室'
+
+    # 其他城市部门：成都 / 重庆 / 郑州 / 长沙 / 西安
+    if dept2 in ('成都', '重庆', '郑州', '长沙', '西安') or \
+       sub_dept in ('成都站', '重庆站', '郑州站', '长沙站', '西安站'):
+        return '综合管理办公室'
+
+    return dept2
+
+
+def normalize_sub_dept(dept2, sub_dept):
+    """根据二级部门归一化三级部门。"""
+    dept2 = str(dept2 or '').strip().replace('\t', '')
+    sub_dept = str(sub_dept or '其他').strip().replace('\t', '')
+
+    if dept2 == '混营销区':
+        return '其他'
+
+    if '成都' in sub_dept:
+        return '成都站'
+    if '重庆' in sub_dept:
+        return '重庆站'
+
+    return sub_dept
+
+
 def parse_date(val):
     """解析日期字符串，去除制表符和时间部分"""
     if not val:
@@ -74,6 +144,14 @@ def weighted_avg(items):
 
 
 # ============================================================
+# 0. 预扫描：识别武汉通讯互联网部门的销售员
+# ============================================================
+print('Scanning internet sales sellers...')
+scan_internet_sellers('D:/432664yjxt1782693742441.xlsx')
+scan_internet_sellers('D:/集团采购-分销业绩表_20260628.xlsx')
+print(f'  Internet sellers: {len(INTERNET_SELLERS)}')
+
+# ============================================================
 # 1. 读取业绩数据（26 财年 Q1）
 # ============================================================
 print('Loading performance data...')
@@ -88,14 +166,20 @@ for r in load_rows('D:/432664yjxt1782693742441.xlsx'):
     is_b = str(r.get('是否核算B端业绩') or '').strip().replace('\t', '')
     if is_b == '否':
         continue
+    raw_dept2 = str(r.get('二级部门') or '').strip().replace('\t', '')
+    raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
+    seller_name = str(r.get('销售员名称') or '').strip().replace('\t', '')
+    dept2 = normalize_dept2(raw_dept2, raw_sub_dept, seller_name)
+    sub_dept = normalize_sub_dept(dept2, raw_sub_dept)
     perf_records.append({
         'date': d,
         'order_no': str(r.get('业绩单号') or '').strip().replace('\t', ''),
         'customer_id': str(r.get('客户编号') or '').strip().replace('\t', ''),
         'customer_name': str(r.get('客户名称') or '').strip().replace('\t', ''),
         'seller_no': str(r.get('销售员工号') or '').strip().replace('\t', ''),
-        'seller_name': str(r.get('销售员名称') or '').strip().replace('\t', ''),
-        'dept': str(r.get('二级部门') or '其他').strip().replace('\t', ''),
+        'seller_name': seller_name,
+        'dept': dept2,
+        'sub_dept': sub_dept,
         'seller_status': str(r.get('销售员状态') or '').strip().replace('\t', ''),
         'perf': to_wan(r.get('业绩总金额')),
         'collect': to_wan(r.get('回款金额')),
@@ -118,9 +202,13 @@ for r in load_rows('D:/25财年Q1数据.xlsx'):
     is_b = str(r.get('是否核算B端业绩') or '').strip().replace('\t', '')
     if is_b == '否':
         continue
+    raw_dept2 = str(r.get('二级部门') or '').strip().replace('\t', '')
+    raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
+    seller_name = str(r.get('销售员名称') or '').strip().replace('\t', '')
+    dept2 = normalize_dept2(raw_dept2, raw_sub_dept, seller_name)
     perf_records_25.append({
-        'dept': str(r.get('二级部门') or '其他').strip().replace('\t', ''),
-        'seller_name': str(r.get('销售员名称') or '').strip().replace('\t', ''),
+        'dept': dept2,
+        'seller_name': seller_name,
         'perf': to_wan(r.get('业绩总金额')),
     })
 print(f'  25Q1 performance records: {len(perf_records_25)}')
@@ -141,6 +229,10 @@ for r in load_rows('D:/集团采购-分销业绩表_20260628.xlsx'):
     order_no = str(r.get('业绩单号') or '').strip().replace('\t', '')
     if not order_no:
         continue
+    raw_dept2 = str(r.get('二级部门') or '').strip().replace('\t', '')
+    raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
+    seller_name = str(r.get('销售员名称') or '').strip().replace('\t', '')
+    dept2 = normalize_dept2(raw_dept2, raw_sub_dept, seller_name)
     if order_no not in debt_by_order:
         debt_by_order[order_no] = {
             'date': d,
@@ -148,9 +240,9 @@ for r in load_rows('D:/集团采购-分销业绩表_20260628.xlsx'):
             'customer_id': str(r.get('客户编号') or '').strip().replace('\t', ''),
             'customer_name': str(r.get('客户名称') or '').strip().replace('\t', ''),
             'seller_no': str(r.get('销售员工号') or '').strip().replace('\t', ''),
-            'seller_name': str(r.get('销售员名称') or '').strip().replace('\t', ''),
+            'seller_name': seller_name,
             'seller_status': str(r.get('销售员状态') or '').strip().replace('\t', ''),
-            'dept': str(r.get('二级部门') or '其他').strip().replace('\t', ''),
+            'dept': dept2,
             'debt': 0.0,
         }
     debt_by_order[order_no]['debt'] += to_wan(r.get('欠款金额'))
