@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+
+# Temporary files
+update_log.txt
+*.tmp
+
+# OS files
+Thumbs.db
+.DS_Store
