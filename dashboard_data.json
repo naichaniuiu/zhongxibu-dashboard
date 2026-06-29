@@ -931,19 +931,6 @@
         "collect_amt": 3.44
       },
       {
-        "name": "王淑涵",
-        "perf": 0.0,
-        "collect": -0.0,
-        "debt": 0.06,
-        "orders": 0,
-        "d30": 0.0,
-        "d30_90": 0.01,
-        "d90_180": 0.0,
-        "d180": 0.06,
-        "total_debt": 0.06,
-        "collect_amt": -0.0
-      },
-      {
         "name": "张宸睿",
         "perf": 0.0,
         "collect": 0.0,
@@ -955,6 +942,19 @@
         "d180": 7.52,
         "total_debt": 11.23,
         "collect_amt": 0.0
+      },
+      {
+        "name": "王淑涵",
+        "perf": 0.0,
+        "collect": -0.0,
+        "debt": 0.06,
+        "orders": 0,
+        "d30": 0.0,
+        "d30_90": 0.01,
+        "d90_180": 0.0,
+        "d180": 0.06,
+        "total_debt": 0.06,
+        "collect_amt": -0.0
       }
     ],
     "郑州站": [
@@ -1306,20 +1306,20 @@
         "rec_weighted": 94799562.0
       },
       {
-        "name": "罗贝",
-        "debt_amt": 89.34,
-        "rec_amt": 56.39,
-        "cycle": 48.5,
-        "debt_weighted": 30386883.0,
-        "rec_weighted": 40320600.0
-      },
-      {
         "name": "胡松",
         "debt_amt": 279.22,
         "rec_amt": 187.94,
         "cycle": 48.5,
         "debt_weighted": 105114095.0,
         "rec_weighted": 121313014.0
+      },
+      {
+        "name": "罗贝",
+        "debt_amt": 89.34,
+        "rec_amt": 56.39,
+        "cycle": 48.5,
+        "debt_weighted": 30386883.0,
+        "rec_weighted": 40320600.0
       },
       {
         "name": "陶迪",
