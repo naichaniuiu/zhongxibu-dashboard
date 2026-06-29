@@ -1,7 +1,7 @@
 ' ============================================================
 '  Zhongxibu Dashboard - One-Click Update + Auto Push to GitHub
 '  Double-click this file to: Read Excel -> Generate HTML -> Push to GitHub
-'  Managers just visit: https://naichaniuniu.github.io/zhongxibu-dashboard/
+'  Managers just visit: https://naichaniuiu.github.io/zhongxibu-dashboard/
 ' ============================================================
 
 Dim WshShell, fso, strPath, q
@@ -79,7 +79,7 @@ If hasChanges = 0 Then
     MsgBox "Dashboard generated, but no changes to commit." & vbCrLf & vbCrLf & _
         "The data may be the same as yesterday." & vbCrLf & _
         "Managers can view at:" & vbCrLf & _
-        "https://naichaniuniu.github.io/zhongxibu-dashboard/", _
+        "https://naichaniuiu.github.io/zhongxibu-dashboard/", _
         vbInformation, "Update Done"
     WScript.Quit 0
 End If
@@ -105,9 +105,9 @@ End If
 ' Show success message
 MsgBox "Dashboard updated successfully!" & vbCrLf & vbCrLf & _
     "Managers can view at:" & vbCrLf & _
-    "https://naichaniuniu.github.io/zhongxibu-dashboard/" & vbCrLf & vbCrLf & _
+    "https://naichaniuiu.github.io/zhongxibu-dashboard/" & vbCrLf & vbCrLf & _
     "Note: GitHub Pages may take 1-2 minutes to refresh.", _
     vbInformation, "Update Done"
 
 ' Open the dashboard in browser
-WshShell.Run "https://naichaniuniu.github.io/zhongxibu-dashboard/"
+WshShell.Run "https://naichaniuiu.github.io/zhongxibu-dashboard/"
