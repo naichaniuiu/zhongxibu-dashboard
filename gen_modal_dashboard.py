@@ -22,10 +22,10 @@ total = {
     'stat_date': data['today'],
     'gen_date': data['today'],
     'v26': kpi['total_perf26'],
-    'v25': kpi['total_perf25'],
+    'v25': kpi['total_perf25'] if kpi['total_perf25'] is not None else None,
     'target': kpi['total_target'],
     'completion': kpi['total_completion'],
-    'yoy': kpi['total_yoy'],
+    'yoy': kpi['total_yoy'] if kpi['total_yoy'] is not None else None,
     'sales': kpi['total_active_sellers'],
     'total_debt': debt_kpi['total'],
     'd30': debt_kpi['d30'],
@@ -113,6 +113,8 @@ def get_dept_status(completion):
         return 'badge-down', '严重下滑'
 
 def fmt_yoy(v):
+    if v is None:
+        return '<span class="trend-neutral">-</span>'
     if v > 0:
         return f'<span class="trend-up">▲ +{v:.1f}%</span>'
     elif v < -50:
@@ -143,16 +145,21 @@ perf_rows = ''
 for d in dept_list:
     badge_cls, badge_text = get_dept_status(d['completion'])
     yoy_html = fmt_yoy(d['yoy'])
+    v25_cell = f'{d["v25"]:.2f}' if d['v25'] is not None else '-'
     perf_rows += f'''<tr onclick="showSalesDetail('{d["dept"]}','perf')" style="cursor:pointer;" title="点击查看销售员业绩明细">
         <td>🏢 {d["dept"]}</td>
         <td class="highlight">{d["v26"]:.2f}</td>
         <td>{d["target"]:.1f}</td>
         <td>{d["completion"]:.1f}%</td>
-        <td>{d["v25"]:.2f}</td>
+        <td>{v25_cell}</td>
         <td>{yoy_html}</td>
         <td>{d["sales"]}</td>
         <td><span class="status-badge {badge_cls}">{badge_text}</span></td>
     </tr>'''
+
+# 汇总行同比显示
+yoy_total_str = f"▼ {total['yoy']:.1f}%" if total['yoy'] is not None else '-'
+v25_total_str = f"{total['v25']:.2f}" if total['v25'] is not None else '-'
 
 # 欠款表格行
 debt_sorted = sorted(dept_list, key=lambda x: x['total_debt'], reverse=True)
@@ -212,7 +219,7 @@ chart_cycle_colors = ['#ff4757' if v > 90 else '#ffa502' if v > 60 else '#00ff88
 # 业绩图表数据
 perf_depts = [d['dept'] for d in dept_list]
 perf_v26 = [d['v26'] for d in dept_list]
-perf_v25 = [d['v25'] for d in dept_list]
+perf_v25 = [d['v25'] if d['v25'] is not None else 0 for d in dept_list]
 perf_pie = [(d['dept'], d['v26']) for d in sorted(dept_list, key=lambda x: x['v26'], reverse=True) if d['v26'] > 0]
 
 # 欠款图表数据
@@ -228,7 +235,7 @@ dept_cust_perf_json = json.dumps(dept_cust_perf, ensure_ascii=False)
 dept_cust_debt_json = json.dumps(dept_cust_debt, ensure_ascii=False)
 cust_cycle_json = json.dumps(cust_cycle_data, ensure_ascii=False)
 dept_list_json = json.dumps([{
-    'dept': d['dept'], 'v26': d['v26'], 'v25': d['v25'], 'yoy': d['yoy'],
+    'dept': d['dept'], 'v26': d['v26'], 'v25': d['v25'] if d['v25'] is not None else 0, 'yoy': d['yoy'] if d['yoy'] is not None else 0,
     'target': d['target'], 'completion': d['completion'], 'sales': d['sales'],
     'd30': d['d30'], 'd30_90': d['d30_90'], 'd90_180': d['d90_180'], 'd180': d['d180'],
     'total_debt': d['total_debt'], 'collect': d['collect'], 'cycle': d['cycle']
@@ -336,8 +343,7 @@ html = f'''<!DOCTYPE html>
         <div class="kpi-card">
             <div class="kpi-icon">📉</div>
             <h3>同比25Q1</h3>
-            <div class="value negative">{total['yoy']:.1f}%</div>
-            <div class="sub">25Q1：{total['v25']:.2f}万</div>
+            {'<div class="value negative">'+str(total['yoy'])+'%</div><div class="sub">25Q1：'+str(total['v25'])+'万</div>' if total['yoy'] is not None else '<div class="value" style="color:#8892b0;">-</div><div class="sub">25Q1数据缺失</div>'}
         </div>
         <div class="kpi-card">
             <div class="kpi-icon">👥</div>
@@ -394,7 +400,7 @@ html = f'''<!DOCTYPE html>
                 <tfoot>
                     <tr>
                         <td>合计</td><td>{total['v26']:.2f}</td><td>{total['target']:.1f}</td><td>{total['completion']:.1f}%</td>
-                        <td>{total['v25']:.2f}</td><td class="trend-down">▼ {total['yoy']:.1f}%</td><td>{total['sales']}</td><td></td>
+                        <td>{v25_total_str}</td><td class="trend-down">{yoy_total_str}</td><td>{total['sales']}</td><td></td>
                     </tr>
                 </tfoot>
             </table>

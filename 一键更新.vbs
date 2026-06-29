@@ -19,10 +19,15 @@ pythonPath = "C:\Users\wm881\.workbuddy\binaries\python\envs\default\Scripts\pyt
 gitExe = "C:\Users\wm881\.workbuddy\vendor\PortableGit\bin\git.exe"
 logFilePath = strPath & "\update_log.txt"
 
-' Step 1: Check Excel file
-excelPath = "C:\Users\wm881\Downloads\业绩 欠款看板.xlsx"
-If Not fso.FileExists(excelPath) Then
-    MsgBox "ERROR: Excel file not found!" & vbCrLf & vbCrLf & "Please download the Excel file to:" & vbCrLf & excelPath, vbCritical, "Update Failed"
+' Step 1: Check new data files (3 Excel files)
+Dim perfFile, paymentFile, debtFile
+perfFile = "D:\432664yjxt1782693742441.xlsx"
+paymentFile = "D:\432664rkdxtbb1782694290617.xlsx"
+debtFile = "D:\集团采购-分销业绩表_20260628.xlsx"
+If Not fso.FileExists(perfFile) Or Not fso.FileExists(paymentFile) Or Not fso.FileExists(debtFile) Then
+    MsgBox "ERROR: One or more data files not found!" & vbCrLf & vbCrLf & _
+        "Please make sure the following files exist:" & vbCrLf & _
+        perfFile & vbCrLf & paymentFile & vbCrLf & debtFile, vbCritical, "Update Failed"
     WScript.Quit 1
 End If
 
@@ -39,14 +44,14 @@ End Function
 WshShell.Run "cmd /c echo === Dashboard Update: %date% %time% === > " & q & logFilePath & q, 0, True
 
 ' Step 2: Process Excel data
-pyCmd = q & pythonPath & q & " " & q & strPath & "\process_data_v2.py" & q
+pyCmd = q & pythonPath & q & " " & q & strPath & "\process_data_v3.py" & q
 If RunCommand("1/4 Processing Excel data", pyCmd) <> 0 Then
     MsgBox "ERROR: Failed to process Excel data." & vbCrLf & "Check update_log.txt for details.", vbCritical, "Update Failed"
     WScript.Quit 1
 End If
 
 ' Step 3: Extract customer data
-pyCmd = q & pythonPath & q & " " & q & strPath & "\extract_customers.py" & q
+pyCmd = q & pythonPath & q & " " & q & strPath & "\extract_customers_v3.py" & q
 If RunCommand("2/4 Extracting customer data", pyCmd) <> 0 Then
     MsgBox "ERROR: Failed to extract customer data." & vbCrLf & "Check update_log.txt for details.", vbCritical, "Update Failed"
     WScript.Quit 1
