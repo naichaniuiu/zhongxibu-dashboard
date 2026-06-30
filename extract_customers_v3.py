@@ -14,7 +14,10 @@ Q1_END = datetime(2026, 6, 30)
 
 DEPT_MAP = {
     '中西部大区': '中西部大区',
+    '中西大区': '中西部大区',
+    '华中大区': '中西部大区',
     '华中大区（已封存）': '中西部大区',
+    '西南大区': '中西部大区',
     '西南大区（已封存）': '中西部大区',
 }
 
@@ -40,41 +43,52 @@ def scan_internet_sellers(path):
 
 
 def normalize_dept2(dept2, sub_dept, seller_name):
-    """根据二级部门、三级部门和销售员名称归一化二级部门。"""
+    """根据二级部门、三级部门和销售员名称归一化二级部门。
+    
+    目标只展示 4 个部门：湖北营销区、综合管理办公室、混营销区、中西销售助理部。
+    """
     dept2 = str(dept2 or '其他').strip().replace('\t', '')
     sub_dept = str(sub_dept or '').strip().replace('\t', '')
     seller = str(seller_name or '').strip().replace('\t', '')
 
-    # 武汉通讯互联网：先按销售员归属拆分（适用于该销售员的所有记录）
+    # 1. 武汉通讯互联网：先按销售员归属拆分
     if seller in INTERNET_SELLERS:
         if seller in ('吴晗', '李国栋'):
             return '混营销区'
         return '湖北营销区'
-    # 再按原始部门名称匹配（兼容数据未归集到销售员的情况）
     if '通讯互联网' in dept2 or '通讯互联网' in sub_dept:
         if seller in ('吴晗', '李国栋'):
             return '混营销区'
         return '湖北营销区'
 
-    # 武汉金融 / 武汉能源交通 / 武汉基建制造 → 湖北营销区
-    if dept2 in ('武汉金融', '武汉能源交通', '武汉基建制造') or \
-       sub_dept in ('武汉金融行业组', '武汉能源交通行业组', '武汉基建制造行业组'):
+    # 2. 已经是目标部门名的，直接返回
+    if dept2 in ('湖北营销区', '综合管理办公室', '混营销区', '中西销售助理部'):
+        return dept2
+
+    # 3. 武汉金融 / 武汉能源交通 / 武汉基建制造 / 武汉通讯互联网 → 湖北营销区
+    if dept2 in ('武汉金融', '武汉能源交通', '武汉基建制造', '武汉通讯互联网') or \
+       sub_dept in ('武汉金融行业组', '武汉能源交通行业组', '武汉基建制造行业组', '武汉通讯互联网行业组'):
         return '湖北营销区'
 
-    # 四川 / 重庆营销区 → 综合管理办公室
+    # 4. 四川营销区 / 重庆营销区 → 综合管理办公室
     if dept2 in ('四川营销区', '重庆营销区'):
         return '综合管理办公室'
 
-    # 其他城市部门：成都 / 重庆 / 郑州 / 长沙 / 西安
+    # 5. 其他城市部门：成都 / 重庆 / 郑州 / 长沙 / 西安 → 综合管理办公室
     if dept2 in ('成都', '重庆', '郑州', '长沙', '西安') or \
        sub_dept in ('成都站', '重庆站', '郑州站', '长沙站', '西安站'):
         return '综合管理办公室'
 
-    return dept2
+    # 6. 解决方案部 / 华中用户拓展部 / 武汉仓 → 归入中西销售助理部
+    if dept2 in ('解决方案部', '华中用户拓展部', '武汉仓'):
+        return '中西销售助理部'
+
+    # 7. 其他未识别的部门 → 归入中西销售助理部（兜底）
+    return '中西销售助理部'
 
 
 def normalize_sub_dept(dept2, sub_dept):
-    """根据二级部门归一化三级部门。"""
+    """根据归一化后的二级部门，归一化三级部门。"""
     dept2 = str(dept2 or '').strip().replace('\t', '')
     sub_dept = str(sub_dept or '其他').strip().replace('\t', '')
 
@@ -143,7 +157,7 @@ print(f'  Internet sellers: {len(INTERNET_SELLERS)}')
 print('Processing performance data...')
 for r in load_rows('D:/26财年Q1业绩数据.xlsx'):
     dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
-    if dept1 not in ('中西部大区', '华中大区', '华中大区（已封存）', '西南大区', '西南大区（已封存）'):
+    if dept1 not in DEPT_MAP:
         continue
     d = parse_date(r.get('业绩日期'))
     if not d or not (Q1_START <= d <= Q1_END):
