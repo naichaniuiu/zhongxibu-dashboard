@@ -214,54 +214,36 @@ for r in load_rows('D:/25财年Q1数据.xlsx'):
 print(f'  25Q1 performance records: {len(perf_records_25)}')
 
 # ============================================================
-# 3. 读取欠款数据（2026 年业绩日期的欠款，按业绩单号聚合，剔除正负相抵为 0 的订单）
+# 3. 读取欠款数据（整个文件所有行直接求和，无过滤）
 # ============================================================
 print('Loading debt data...')
-# 按业绩单号聚合
-debt_by_order = {}
+# 按行直接处理，不按订单聚合，不过滤部门和日期
+debt_records = []
 for r in load_rows('D:/欠款数据.xlsx'):
-    dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
-    if dept1 not in DEPT_MAP:
-        continue
     d = parse_date(r.get('业绩日期'))
-    if not d or d.year != 2026:
-        continue
-    order_no = str(r.get('业绩单号') or '').strip().replace('\t', '')
-    if not order_no:
-        continue
     raw_dept2 = str(r.get('二级部门') or '').strip().replace('\t', '')
     raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
     seller_name = str(r.get('销售员名称') or '').strip().replace('\t', '')
     dept2 = normalize_dept2(raw_dept2, raw_sub_dept, seller_name)
-    if order_no not in debt_by_order:
-        debt_by_order[order_no] = {
-            'date': d,
-            'order_no': order_no,
-            'customer_id': str(r.get('客户编号') or '').strip().replace('\t', ''),
-            'customer_name': str(r.get('客户名称') or '').strip().replace('\t', ''),
-            'seller_no': str(r.get('销售员工号') or '').strip().replace('\t', ''),
-            'seller_name': seller_name,
-            'seller_status': str(r.get('销售员状态') or '').strip().replace('\t', ''),
-            'dept': dept2,
-            'debt': 0.0,
-        }
-    debt_by_order[order_no]['debt'] += to_wan(r.get('欠款金额'))
-    # 取该订单最早的业绩日期用于计算账龄
-    if d < debt_by_order[order_no]['date']:
-        debt_by_order[order_no]['date'] = d
-
-# 只保留净额 > 0 的订单
-debt_records = []
-for rec in debt_by_order.values():
-    if rec['debt'] <= 0:
-        continue
-    days = (TODAY - rec['date']).days
+    order_no = str(r.get('业绩单号') or '').strip().replace('\t', '')
+    debt_val = to_wan(r.get('欠款金额'))
+    days = (TODAY - d).days if d else 0
     if days < 0:
         days = 0
-    rec['days'] = days
-    debt_records.append(rec)
+    debt_records.append({
+        'date': d,
+        'order_no': order_no,
+        'customer_id': str(r.get('客户编号') or '').strip().replace('\t', ''),
+        'customer_name': str(r.get('客户名称') or '').strip().replace('\t', ''),
+        'seller_no': str(r.get('销售员工号') or '').strip().replace('\t', ''),
+        'seller_name': seller_name,
+        'seller_status': str(r.get('销售员状态') or '').strip().replace('\t', ''),
+        'dept': dept2,
+        'debt': debt_val,
+        'days': days,
+    })
 
-print(f'  Debt orders (2026): {len(debt_records)}')
+print(f'  Debt rows: {len(debt_records)}, total debt: {sum(r["debt"] for r in debt_records):.2f}')
 
 # ============================================================
 # 4. 读取认款数据，计算回款周期

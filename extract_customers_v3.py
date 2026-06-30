@@ -167,49 +167,19 @@ for r in load_rows('D:/26财年Q1业绩数据.xlsx'):
     c['total_debt'] += debt
     c['orders'] += 1
 
-# 2. 欠款数据：只统计 2026 年业绩日期的欠款，按业绩单号聚合剔除正负相抵为 0 的订单
+# 2. 欠款数据：整个文件所有行直接求和，无过滤
 print('Processing debt data...')
-# 先按业绩单号聚合
-order_debt = defaultdict(lambda: {
-    'debt': 0.0,
-    'date': None,
-    'dept': '',
-    'seller': '',
-    'customer': '',
-})
 for r in load_rows('D:/欠款数据.xlsx'):
-    dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
-    if dept1 not in ('中西部大区', '华中大区（已封存）', '西南大区（已封存）'):
-        continue
     d = parse_date(r.get('业绩日期'))
-    if not d or d.year != 2026:
-        continue
-    order_no = str(r.get('业绩单号') or '').strip().replace('\t', '')
-    if not order_no:
-        continue
-    od = order_debt[order_no]
-    od['debt'] += to_wan(r.get('欠款金额'))
-    # 记录最早的业绩日期及客户/销售员信息
-    if od['date'] is None or d < od['date']:
-        od['date'] = d
-        raw_dept2 = str(r.get('二级部门') or '').strip().replace('\t', '')
-        raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
-        seller = str(r.get('销售员名称') or '').strip().replace('\t', '')
-        od['dept'] = normalize_dept2(raw_dept2, raw_sub_dept, seller)
-        od['seller'] = seller
-        od['customer'] = str(r.get('客户名称') or '').strip().replace('\t', '') or '未知客户'
-
-# 只保留净额 > 0 的订单，并分配到客户
-for order_no, od in order_debt.items():
-    if od['debt'] <= 0:
-        continue
-    days = (TODAY - od['date']).days
+    raw_dept2 = str(r.get('二级部门') or '').strip().replace('\t', '')
+    raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
+    seller = str(r.get('销售员名称') or '').strip().replace('\t', '')
+    customer = str(r.get('客户名称') or '').strip().replace('\t', '') or '未知客户'
+    dept = normalize_dept2(raw_dept2, raw_sub_dept, seller)
+    debt_val = to_wan(r.get('欠款金额'))
+    days = (TODAY - d).days if d else 0
     if days < 0:
         days = 0
-    dept = od['dept']
-    seller = od['seller']
-    customer = od['customer']
-    debt_val = od['debt']
     
     c = result[dept][seller][customer]
     c['customer'] = customer
