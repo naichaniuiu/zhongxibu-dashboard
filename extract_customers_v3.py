@@ -56,14 +56,10 @@ def normalize_dept2(dept2, sub_dept, seller_name):
     if dept2 == '武汉仓' or sub_dept == '武汉仓':
         return None
 
-    # 1. 武汉通讯互联网：吴晗/李国栋 → 综合管理办公室（原混营销区已合并），其他 → 湖北营销区
+    # 1. 武汉通讯互联网：所有销售员 → 湖北营销区（吴晗/李国栋已改为湖北营销区）
     if seller in INTERNET_SELLERS:
-        if seller in ('吴晗', '李国栋'):
-            return '综合管理办公室'
         return '湖北营销区'
     if '通讯互联网' in dept2 or '通讯互联网' in sub_dept:
-        if seller in ('吴晗', '李国栋'):
-            return '综合管理办公室'
         return '湖北营销区'
 
     # 2. 已经是目标部门名的，直接返回
@@ -96,13 +92,17 @@ def normalize_dept2(dept2, sub_dept, seller_name):
     return '湖北营销区'
 
 
-def normalize_sub_dept(dept2, sub_dept, raw_dept2=''):
-    """根据归一化后的二级部门和原始二级部门，归一化三级部门。"""
+def normalize_sub_dept(dept2, sub_dept, raw_dept2='', seller_name=''):
+    """根据归一化后的二级部门、原始二级部门和销售员名称，归一化三级部门。"""
     dept2 = str(dept2 or '').strip().replace('\t', '')
     sub_dept = str(sub_dept or '其他').strip().replace('\t', '')
     raw_dept2 = str(raw_dept2 or '').strip().replace('\t', '')
+    seller = str(seller_name or '').strip().replace('\t', '')
 
-    # 原混营销区（吴晗/李国栋）合并为综合管理办公室后，三级统一为其他
+    # 吴晗/李国栋归入湖北营销区后，三级统一为其他
+    if seller in ('吴晗', '李国栋'):
+        return '其他'
+
     # 中西销售助理部/华中用户拓展部/解决方案部归入湖北营销区后，三级统一为其他
     if raw_dept2 in ('中西销售助理部', '华中用户拓展部', '解决方案部'):
         return '其他'
@@ -184,7 +184,7 @@ for r in load_rows('D:/26财年Q1业绩数据.xlsx'):
     dept = normalize_dept2(raw_dept2, raw_sub_dept, seller)
     if dept is None:
         continue  # 武汉仓等删除部门，跳过
-    sub_dept = normalize_sub_dept(dept, raw_sub_dept, raw_dept2)
+    sub_dept = normalize_sub_dept(dept, raw_sub_dept, raw_dept2, seller)
     perf = to_wan(r.get('业绩总金额'))
     collect = to_wan(r.get('回款金额'))
     debt = to_wan(r.get('欠款金额'))
