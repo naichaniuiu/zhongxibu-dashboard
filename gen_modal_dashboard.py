@@ -5,6 +5,7 @@
 下钻逻辑：部门行点击 -> 弹窗销售员列表 -> 点击销售员名 -> 弹窗切换客户明细（带返回按钮）
 """
 import json, sys, os
+from datetime import datetime, timedelta
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -13,14 +14,24 @@ with open(os.path.join(BASE_DIR, 'dashboard_data.json'), encoding='utf-8') as f:
 with open(os.path.join(BASE_DIR, 'customer_detail.json'), encoding='utf-8') as f:
     cust_detail = json.load(f)  # {dept: {seller: [{customer, perf, collect, total_debt, d30, d30_90, d90_180, d180, cycle, max_days, orders}]}}
 
+# 数据截止日期为生成日的前一天，统计基日=数据截止日，生成于=实际生成日期
+raw_data_date = data.get('data_date', data['today'])
+data_date_obj = datetime.strptime(raw_data_date, '%Y-%m-%d')
+stat_date_obj = data_date_obj - timedelta(days=1)
+gen_date_obj = datetime.now()
+
+data_date = data_date_obj.strftime('%Y-%m-%d')
+stat_date = stat_date_obj.strftime('%Y-%m-%d')
+gen_date = gen_date_obj.strftime('%Y-%m-%d')
+
 dept_list = data['dept_data']
 kpi = data['kpi']
 debt_kpi = data['debt_kpi']
 cycle_kpi = data['cycle_kpi']
 total = {
-    'data_date': data['data_date'],
-    'stat_date': data['today'],
-    'gen_date': data['today'],
+    'data_date': data_date,
+    'stat_date': stat_date,
+    'gen_date': gen_date,
     'v26': kpi['total_perf26'],
     'v25': kpi['total_perf25'] if kpi['total_perf25'] is not None else None,
     'target': kpi['total_target'],
