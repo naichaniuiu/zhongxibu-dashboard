@@ -14,10 +14,10 @@ with open(os.path.join(BASE_DIR, 'dashboard_data.json'), encoding='utf-8') as f:
 with open(os.path.join(BASE_DIR, 'customer_detail.json'), encoding='utf-8') as f:
     cust_detail = json.load(f)  # {dept: {seller: [{customer, perf, collect, total_debt, d30, d30_90, d90_180, d180, cycle, max_days, orders}]}}
 
-# 数据截止日期为生成日的前一天，统计基日=数据截止日，生成于=实际生成日期
+# 数据截止=统计基日=生成日的前一天，生成于=实际生成日期
 raw_data_date = data.get('data_date', data['today'])
-data_date_obj = datetime.strptime(raw_data_date, '%Y-%m-%d')
-stat_date_obj = data_date_obj - timedelta(days=1)
+data_date_obj = datetime.strptime(raw_data_date, '%Y-%m-%d') - timedelta(days=1)
+stat_date_obj = data_date_obj
 gen_date_obj = datetime.now()
 
 data_date = data_date_obj.strftime('%Y-%m-%d')
