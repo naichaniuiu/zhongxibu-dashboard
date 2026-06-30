@@ -7,9 +7,9 @@ from collections import defaultdict, Counter
 # ============================================================
 # 中西部大区 26 财年 Q1 数据看板 - 新数据源整合处理
 # 数据源：
-#   1) 业绩数据：D:/432664yjxt1782693742441.xlsx
-#   2) 认款数据：D:/432664rkdxtbb1782694290617.xlsx
-#   3) 欠款数据：D:/集团采购-分销业绩表_20260628.xlsx
+#   1) 业绩数据：D:/26财年Q1业绩数据.xlsx
+#   2) 认款数据：D:/认款数据.xlsx
+#   3) 欠款数据：D:/欠款数据.xlsx
 #   4) 25Q1 数据：D:/25财年Q1数据.xlsx
 # ============================================================
 
@@ -147,8 +147,8 @@ def weighted_avg(items):
 # 0. 预扫描：识别武汉通讯互联网部门的销售员
 # ============================================================
 print('Scanning internet sales sellers...')
-scan_internet_sellers('D:/432664yjxt1782693742441.xlsx')
-scan_internet_sellers('D:/集团采购-分销业绩表_20260628.xlsx')
+scan_internet_sellers('D:/26财年Q1业绩数据.xlsx')
+scan_internet_sellers('D:/欠款数据.xlsx')
 print(f'  Internet sellers: {len(INTERNET_SELLERS)}')
 
 # ============================================================
@@ -156,7 +156,7 @@ print(f'  Internet sellers: {len(INTERNET_SELLERS)}')
 # ============================================================
 print('Loading performance data...')
 perf_records = []
-for r in load_rows('D:/432664yjxt1782693742441.xlsx'):
+for r in load_rows('D:/26财年Q1业绩数据.xlsx'):
     dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
     if dept1 not in DEPT_MAP:
         continue
@@ -219,7 +219,7 @@ print(f'  25Q1 performance records: {len(perf_records_25)}')
 print('Loading debt data...')
 # 按业绩单号聚合
 debt_by_order = {}
-for r in load_rows('D:/集团采购-分销业绩表_20260628.xlsx'):
+for r in load_rows('D:/欠款数据.xlsx'):
     dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
     if dept1 not in DEPT_MAP:
         continue
@@ -275,7 +275,7 @@ for rec in perf_records:
 
 # 回款周期记录：{dept, seller, days, amount}
 cycle_records = []
-for r in load_rows('D:/432664rkdxtbb1782694290617.xlsx'):
+for r in load_rows('D:/认款数据.xlsx'):
     if str(r.get('目标认款类型') or '').strip() != '业绩单认款':
         continue
     order_no = str(r.get('业绩单号') or '').strip().replace('\t', '')
@@ -510,9 +510,9 @@ dashboard_data = {
     'data_date': Q1_END.strftime('%Y-%m-%d'),
     'today': TODAY.strftime('%Y-%m-%d'),
     'source_files': {
-        'performance': '432664yjxt1782693742441.xlsx',
-        'payment': '432664rkdxtbb1782694290617.xlsx',
-        'debt': '集团采购-分销业绩表_20260628.xlsx',
+        'performance': '26财年Q1业绩数据.xlsx',
+        'payment': '认款数据.xlsx',
+        'debt': '欠款数据.xlsx',
         'perf25': '25财年Q1数据.xlsx',
     },
     'kpi': {

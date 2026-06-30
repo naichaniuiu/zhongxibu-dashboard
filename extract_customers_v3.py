@@ -135,13 +135,13 @@ result = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {
 
 # 0. 预扫描：识别武汉通讯互联网部门的销售员
 print('Scanning internet sales sellers...')
-scan_internet_sellers('D:/432664yjxt1782693742441.xlsx')
-scan_internet_sellers('D:/集团采购-分销业绩表_20260628.xlsx')
+scan_internet_sellers('D:/26财年Q1业绩数据.xlsx')
+scan_internet_sellers('D:/欠款数据.xlsx')
 print(f'  Internet sellers: {len(INTERNET_SELLERS)}')
 
 # 1. 业绩数据：Q1 中西部大区
 print('Processing performance data...')
-for r in load_rows('D:/432664yjxt1782693742441.xlsx'):
+for r in load_rows('D:/26财年Q1业绩数据.xlsx'):
     dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
     if dept1 not in ('中西部大区', '华中大区', '华中大区（已封存）', '西南大区', '西南大区（已封存）'):
         continue
@@ -177,7 +177,7 @@ order_debt = defaultdict(lambda: {
     'seller': '',
     'customer': '',
 })
-for r in load_rows('D:/集团采购-分销业绩表_20260628.xlsx'):
+for r in load_rows('D:/欠款数据.xlsx'):
     dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
     if dept1 not in ('中西部大区', '华中大区（已封存）', '西南大区（已封存）'):
         continue
@@ -236,7 +236,7 @@ for dept, sellers in result.items():
             if data['perf'] > 0:
                 order_to_dept.setdefault(customer, dept)
 
-for r in load_rows('D:/432664rkdxtbb1782694290617.xlsx'):
+for r in load_rows('D:/认款数据.xlsx'):
     if str(r.get('目标认款类型') or '').strip() != '业绩单认款':
         continue
     perf_date = parse_date(r.get('业绩日期'))

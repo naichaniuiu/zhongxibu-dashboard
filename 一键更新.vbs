@@ -21,9 +21,9 @@ logFilePath = strPath & "\\update_log.txt"
 
 ' Step 1: Check new data files (4 Excel files)
 Dim perfFile, paymentFile, debtFile, perf25File
-perfFile = "D:\\432664yjxt1782693742441.xlsx"
-paymentFile = "D:\\432664rkdxtbb1782694290617.xlsx"
-debtFile = "D:\\集团采购-分销业绩表_20260628.xlsx"
+perfFile = "D:\\26财年Q1业绩数据.xlsx"
+paymentFile = "D:\\认款数据.xlsx"
+debtFile = "D:\\欠款数据.xlsx"
 perf25File = "D:\\25财年Q1数据.xlsx"
 If Not fso.FileExists(perfFile) Or Not fso.FileExists(paymentFile) Or Not fso.FileExists(debtFile) Or Not fso.FileExists(perf25File) Then
     MsgBox "ERROR: One or more data files not found!" & vbCrLf & vbCrLf & _
