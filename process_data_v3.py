@@ -55,8 +55,8 @@ def scan_internet_sellers(path):
 def normalize_dept2(dept2, sub_dept, seller_name):
     """根据二级部门、三级部门和销售员名称归一化二级部门。
     
-    目标只展示 3 个部门：湖北营销区、综合管理办公室、混营销区。
-    中西销售助理部、华中用户拓展部 → 湖北营销区；武汉仓 → 删除（返回 None）。
+    目标只展示 2 个部门：湖北营销区、综合管理办公室。
+    混营销区已合并为综合管理办公室；武汉仓 → 删除（返回 None）。
     """
     dept2 = str(dept2 or '其他').strip().replace('\t', '')
     sub_dept = str(sub_dept or '').strip().replace('\t', '')
@@ -66,18 +66,18 @@ def normalize_dept2(dept2, sub_dept, seller_name):
     if dept2 == '武汉仓' or sub_dept == '武汉仓':
         return None
 
-    # 1. 武汉通讯互联网：先按销售员归属拆分
+    # 1. 武汉通讯互联网：吴晗/李国栋 → 综合管理办公室（原混营销区已合并），其他 → 湖北营销区
     if seller in INTERNET_SELLERS:
         if seller in ('吴晗', '李国栋'):
-            return '混营销区'
+            return '综合管理办公室'
         return '湖北营销区'
     if '通讯互联网' in dept2 or '通讯互联网' in sub_dept:
         if seller in ('吴晗', '李国栋'):
-            return '混营销区'
+            return '综合管理办公室'
         return '湖北营销区'
 
     # 2. 已经是目标部门名的，直接返回
-    if dept2 in ('湖北营销区', '综合管理办公室', '混营销区'):
+    if dept2 in ('湖北营销区', '综合管理办公室'):
         return dept2
 
     # 3. 武汉金融 / 武汉能源交通 / 武汉基建制造 / 武汉通讯互联网 → 湖北营销区
@@ -112,9 +112,7 @@ def normalize_sub_dept(dept2, sub_dept, raw_dept2=''):
     sub_dept = str(sub_dept or '其他').strip().replace('\t', '')
     raw_dept2 = str(raw_dept2 or '').strip().replace('\t', '')
 
-    if dept2 == '混营销区':
-        return '其他'
-
+    # 原混营销区（吴晗/李国栋）合并为综合管理办公室后，三级统一为其他
     # 中西销售助理部/华中用户拓展部/解决方案部归入湖北营销区后，三级统一为其他
     if raw_dept2 in ('中西销售助理部', '华中用户拓展部', '解决方案部'):
         return '其他'
