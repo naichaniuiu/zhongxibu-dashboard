@@ -8,7 +8,7 @@ from datetime import datetime
 # 中西部大区客户明细提取 - 新数据源
 # ============================================================
 
-TODAY = datetime(2026, 6, 29)
+TODAY = datetime(2026, 6, 30)
 Q1_START = datetime(2026, 4, 1)
 Q1_END = datetime(2026, 6, 30)
 

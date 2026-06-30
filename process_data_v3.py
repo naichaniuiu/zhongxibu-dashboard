@@ -13,7 +13,7 @@ from collections import defaultdict, Counter
 #   4) 25Q1 数据：D:/25财年Q1数据.xlsx
 # ============================================================
 
-TODAY = datetime(2026, 6, 29)  # 数据基准日
+TODAY = datetime(2026, 6, 30)  # 数据基准日
 Q1_START = datetime(2026, 4, 1)
 Q1_END = datetime(2026, 6, 30)
 Q1_START_25 = datetime(2025, 4, 1)
