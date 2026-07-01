@@ -6,14 +6,17 @@ from collections import defaultdict, Counter
 
 # ============================================================
 # 中西部大区 26 财年 Q1 数据看板 - 新数据源整合处理
-# 数据源：
-#   1) 业绩数据：D:/26财年Q1业绩数据.xlsx
-#   2) 认款数据：D:/认款数据.xlsx
-#   3) 欠款数据：D:/欠款数据.xlsx
-#   4) 25Q1 数据：D:/25财年Q1数据.xlsx
+# 数据源（单文件多Sheet）：
+#   D:/业绩欠款看板.xlsx
+#     Sheet0: 25财年Q1业绩
+#     Sheet1: 26财年Q1业绩
+#     Sheet2: 欠款数据
+#     Sheet3: 26财年Q1认款数据
+#     Sheet4: 26财年业绩目标季度拆分
 # ============================================================
 
-TODAY = datetime(2026, 6, 30)  # 数据基准日
+TODAY = datetime(2026, 7, 1)  # 数据基准日（数据拉取日）
+DATA_FILE = 'D:/业绩欠款看板.xlsx'  # 单文件多Sheet数据源
 Q1_START = datetime(2026, 4, 1)
 Q1_END = datetime(2026, 6, 30)
 Q1_START_25 = datetime(2025, 4, 1)
@@ -38,9 +41,9 @@ DEPT_MAP = {
 INTERNET_SELLERS = set()
 
 
-def scan_internet_sellers(path):
+def scan_internet_sellers(path, sheet_idx=0):
     """扫描文件中原始部门为武汉通讯互联网的销售员，用于后续按销售员归属映射。"""
-    for r in load_rows(path):
+    for r in load_rows(path, sheet_idx=sheet_idx):
         dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
         if dept1 not in DEPT_MAP:
             continue
@@ -171,8 +174,8 @@ def weighted_avg(items):
 # 0. 预扫描：识别武汉通讯互联网部门的销售员
 # ============================================================
 print('Scanning internet sales sellers...')
-scan_internet_sellers('D:/26财年Q1业绩数据.xlsx')
-scan_internet_sellers('D:/欠款数据.xlsx')
+scan_internet_sellers(DATA_FILE, sheet_idx=1)  # 26Q1业绩
+scan_internet_sellers(DATA_FILE, sheet_idx=2)  # 欠款数据
 print(f'  Internet sellers: {len(INTERNET_SELLERS)}')
 
 # ============================================================
@@ -180,7 +183,7 @@ print(f'  Internet sellers: {len(INTERNET_SELLERS)}')
 # ============================================================
 print('Loading performance data...')
 perf_records = []
-for r in load_rows('D:/26财年Q1业绩数据.xlsx'):
+for r in load_rows(DATA_FILE, sheet_idx=1):
     dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
     if dept1 not in DEPT_MAP:
         continue
@@ -218,7 +221,7 @@ print(f'  Performance records: {len(perf_records)}')
 # ============================================================
 print('Loading 25Q1 performance data...')
 perf_records_25 = []
-for r in load_rows('D:/25财年Q1数据.xlsx'):
+for r in load_rows(DATA_FILE, sheet_idx=0):
     dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
     if dept1 not in DEPT_MAP:
         continue
@@ -247,7 +250,7 @@ print(f'  25Q1 performance records: {len(perf_records_25)}')
 print('Loading debt data...')
 # 按行直接处理，不按订单聚合，不过滤部门和日期
 debt_records = []
-for r in load_rows('D:/欠款数据.xlsx'):
+for r in load_rows(DATA_FILE, sheet_idx=2):
     d = parse_date(r.get('业绩日期'))
     raw_dept2 = str(r.get('二级部门') or '').strip().replace('\t', '')
     raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
@@ -287,7 +290,7 @@ for rec in perf_records:
 
 # 回款周期记录：{dept, seller, days, amount}
 cycle_records = []
-for r in load_rows('D:/认款数据.xlsx'):
+for r in load_rows(DATA_FILE, sheet_idx=3):
     if str(r.get('目标认款类型') or '').strip() != '业绩单认款':
         continue
     order_no = str(r.get('业绩单号') or '').strip().replace('\t', '')
@@ -533,10 +536,12 @@ dashboard_data = {
     'data_date': Q1_END.strftime('%Y-%m-%d'),
     'today': TODAY.strftime('%Y-%m-%d'),
     'source_files': {
-        'performance': '26财年Q1业绩数据.xlsx',
-        'payment': '认款数据.xlsx',
-        'debt': '欠款数据.xlsx',
-        'perf25': '25财年Q1数据.xlsx',
+        'combined': '业绩欠款看板.xlsx',
+        'sheet_25q1': '25财年Q1业绩',
+        'sheet_26q1': '26财年Q1业绩',
+        'sheet_debt': '欠款数据',
+        'sheet_payment': '26财年Q1认款数据',
+        'sheet_target': '26财年业绩目标季度拆分',
     },
     'kpi': {
         'total_perf26': round(total_perf, 2),

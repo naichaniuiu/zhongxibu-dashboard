@@ -19,16 +19,13 @@ pythonPath = "C:\\Users\\wm881\\.workbuddy\\binaries\\python\\envs\\default\\Scr
 gitExe = "C:\\Users\\wm881\\.workbuddy\\vendor\\PortableGit\\bin\\git.exe"
 logFilePath = strPath & "\\update_log.txt"
 
-' Step 1: Check new data files (4 Excel files)
-Dim perfFile, paymentFile, debtFile, perf25File
-perfFile = "D:\\26财年Q1业绩数据.xlsx"
-paymentFile = "D:\\认款数据.xlsx"
-debtFile = "D:\\欠款数据.xlsx"
-perf25File = "D:\\25财年Q1数据.xlsx"
-If Not fso.FileExists(perfFile) Or Not fso.FileExists(paymentFile) Or Not fso.FileExists(debtFile) Or Not fso.FileExists(perf25File) Then
-    MsgBox "ERROR: One or more data files not found!" & vbCrLf & vbCrLf & _
-        "Please make sure the following files exist:" & vbCrLf & _
-        perfFile & vbCrLf & paymentFile & vbCrLf & debtFile & vbCrLf & perf25File, vbCritical, "Update Failed"
+' Step 1: Check new data file (single combined Excel)
+Dim dataFile
+dataFile = "D:\\业绩欠款看板.xlsx"
+If Not fso.FileExists(dataFile) Then
+    MsgBox "ERROR: Data file not found!" & vbCrLf & vbCrLf & _
+        "Please make sure the following file exists:" & vbCrLf & _
+        dataFile, vbCritical, "Update Failed"
     WScript.Quit 1
 End If
 

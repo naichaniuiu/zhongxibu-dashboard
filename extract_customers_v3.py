@@ -8,7 +8,8 @@ from datetime import datetime
 # 中西部大区客户明细提取 - 新数据源
 # ============================================================
 
-TODAY = datetime(2026, 6, 30)
+TODAY = datetime(2026, 7, 1)  # 数据基准日（数据拉取日）
+DATA_FILE = 'D:/业绩欠款看板.xlsx'  # 单文件多Sheet数据源
 Q1_START = datetime(2026, 4, 1)
 Q1_END = datetime(2026, 6, 30)
 
@@ -28,9 +29,9 @@ DEPT_MAP = {
 INTERNET_SELLERS = set()
 
 
-def scan_internet_sellers(path):
+def scan_internet_sellers(path, sheet_idx=0):
     """扫描文件中原始部门为武汉通讯互联网的销售员，用于后续按销售员归属映射。"""
-    for r in load_rows(path):
+    for r in load_rows(path, sheet_idx=sheet_idx):
         dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
         if dept1 not in DEPT_MAP:
             continue
@@ -161,13 +162,13 @@ result = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {
 
 # 0. 预扫描：识别武汉通讯互联网部门的销售员
 print('Scanning internet sales sellers...')
-scan_internet_sellers('D:/26财年Q1业绩数据.xlsx')
-scan_internet_sellers('D:/欠款数据.xlsx')
+scan_internet_sellers(DATA_FILE, sheet_idx=1)  # 26Q1业绩
+scan_internet_sellers(DATA_FILE, sheet_idx=2)  # 欠款数据
 print(f'  Internet sellers: {len(INTERNET_SELLERS)}')
 
 # 1. 业绩数据：Q1 中西部大区
 print('Processing performance data...')
-for r in load_rows('D:/26财年Q1业绩数据.xlsx'):
+for r in load_rows(DATA_FILE, sheet_idx=1):
     dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
     if dept1 not in DEPT_MAP:
         continue
@@ -198,7 +199,7 @@ for r in load_rows('D:/26财年Q1业绩数据.xlsx'):
 
 # 2. 欠款数据：整个文件所有行直接求和，无过滤
 print('Processing debt data...')
-for r in load_rows('D:/欠款数据.xlsx'):
+for r in load_rows(DATA_FILE, sheet_idx=2):
     d = parse_date(r.get('业绩日期'))
     raw_dept2 = str(r.get('二级部门') or '').strip().replace('\t', '')
     raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
@@ -237,7 +238,7 @@ for dept, sellers in result.items():
             if data['perf'] > 0:
                 order_to_dept.setdefault(customer, dept)
 
-for r in load_rows('D:/认款数据.xlsx'):
+for r in load_rows(DATA_FILE, sheet_idx=3):
     if str(r.get('目标认款类型') or '').strip() != '业绩单认款':
         continue
     perf_date = parse_date(r.get('业绩日期'))
