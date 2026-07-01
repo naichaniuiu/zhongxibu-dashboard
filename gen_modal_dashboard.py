@@ -194,7 +194,7 @@ for d in dept_list:
     yoy_html = fmt_yoy(d['yoy'])
     v25_cell = f'{d["v25"]:.2f}' if d['v25'] and d['v25'] > 0 else '-'
     perf_rows += f'''<tr onclick="showSellers('{d["key"]}','perf')" style="cursor:pointer;" title="点击查看销售员业绩明细">
-        <td>📂 {d["sub_dept"]}<br><span style="color:#8892b0;font-size:0.75em;font-weight:normal;">{d["dept"]}</span></td>
+        <td>📂 {d["sub_dept"]}</td>
         <td class="highlight">{d["v26"]:.2f}</td>
         <td>{d["target"]:.1f}</td>
         <td>{d["completion"]:.1f}%</td>
@@ -215,7 +215,7 @@ for d in debt_sorted:
     badge_cls, badge_text = get_debt_status(d)
     risky = d['d90_180'] + d['d180']
     debt_rows += f'''<tr onclick="showSellers('{d["key"]}','debt')" style="cursor:pointer;">
-        <td>📂 {d["sub_dept"]}<br><span style="color:#8892b0;font-size:0.75em;font-weight:normal;">{d["dept"]}</span></td>
+        <td>📂 {d["sub_dept"]}</td>
         <td>{d["d30"]:.2f}</td>
         <td>{d["d30_90"]:.2f}</td>
         <td class="warning">{d["d90_180"]:.2f}</td>
@@ -230,7 +230,7 @@ cycle_rows = ''
 for d in cycle_sorted:
     badge_cls, badge_text, val_cls = get_cycle_status(d['cycle'])
     cycle_rows += f'''<tr onclick="showSellers('{d["key"]}','cycle')" style="cursor:pointer;">
-        <td>📂 {d["sub_dept"]}<br><span style="color:#8892b0;font-size:0.75em;font-weight:normal;">{d["dept"]}</span></td>
+        <td>📂 {d["sub_dept"]}</td>
         <td>{d["total_debt"]:.2f}</td>
         <td>{d["collect"]:.2f}</td>
         <td class="{val_cls}">{d["cycle"]:.1f}</td>
@@ -663,7 +663,7 @@ function renderSellerPerf(dept, subDept) {{
     const tp = sellers.reduce((s, x) => s + (x.perf || 0), 0).toFixed(2);
     const tc = sellers.reduce((s, x) => s + (x.collect || 0), 0).toFixed(2);
 
-    document.getElementById('drillModalTitle').innerHTML = `📊 ${{subDept}} - 销售员业绩明细 <span style="font-size:0.7em;color:#8892b0;">（${{dept}}，共${{sellers.length}}人）</span>`;
+    document.getElementById('drillModalTitle').innerHTML = `📊 ${{subDept}} - 销售员业绩明细 <span style="font-size:0.7em;color:#8892b0;">（共${{sellers.length}}人）</span>`;
     document.getElementById('drillTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.82em;">
         <thead><tr style="background:rgba(0,212,255,0.12);">
             <th style="padding:8px 6px;color:#00d4ff;text-align:left;">销售员</th>
@@ -703,7 +703,7 @@ function renderSellerDebt(dept, subDept) {{
 
     const td = sellers.reduce((s, x) => s + (x.total_debt || 0), 0).toFixed(2);
 
-    document.getElementById('drillModalTitle').innerHTML = `💰 ${{subDept}} - 销售员欠款明细 <span style="font-size:0.7em;color:#8892b0;">（${{dept}}，共${{sellers.length}}人）</span>`;
+    document.getElementById('drillModalTitle').innerHTML = `💰 ${{subDept}} - 销售员欠款明细 <span style="font-size:0.7em;color:#8892b0;">（共${{sellers.length}}人）</span>`;
     document.getElementById('drillTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.8em;">
         <thead><tr style="background:rgba(0,212,255,0.12);">
             <th style="padding:8px 6px;color:#00d4ff;text-align:left;">销售员</th>
@@ -741,7 +741,7 @@ function renderSellerCycle(dept, subDept) {{
         </tr>`;
     }}).join('');
 
-    document.getElementById('drillModalTitle').innerHTML = `⏱️ ${{subDept}} - 销售员回款周期明细 <span style="font-size:0.7em;color:#8892b0;">（${{dept}}，共${{sellers.length}}人）</span>`;
+    document.getElementById('drillModalTitle').innerHTML = `⏱️ ${{subDept}} - 销售员回款周期明细 <span style="font-size:0.7em;color:#8892b0;">（共${{sellers.length}}人）</span>`;
     document.getElementById('drillTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.82em;">
         <thead><tr style="background:rgba(0,212,255,0.12);">
             <th style="padding:8px 6px;color:#00d4ff;text-align:left;">销售员</th>
