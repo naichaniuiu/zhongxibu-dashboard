@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 中西部大区 26 财年 Q1 数据看板生成器
-看板结构：部门表格直接展示三级部门，下钻：三级部门 → 客户（2层）
+看板结构：部门表格直接展示三级部门，下钻：三级部门 → 销售员 → 客户（3层）
 """
 import json, sys, os
 from datetime import datetime, timedelta
@@ -12,7 +12,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(BASE_DIR, 'dashboard_data.json'), encoding='utf-8') as f:
     data = json.load(f)
 with open(os.path.join(BASE_DIR, 'customer_detail.json'), encoding='utf-8') as f:
-    cust_detail = json.load(f)  # {dept: {seller: [{customer, sub_dept, perf, collect, total_debt, d30, d30_90, d90_180, d180, cycle, max_days, orders}]}}
+    cust_detail = json.load(f)  # {dept: {seller: [{customer, sub_dept, perf, collect, total_debt, ...}]}}
 
 # 数据截止=统计基日=生成日的前一天，生成于=实际生成日期
 raw_data_date = data.get('data_date', data['today'])
@@ -51,7 +51,54 @@ total = {
     'avg_cycle': cycle_kpi['avg_cycle'],
 }
 
-# 按 (dept, sub_dept) 聚合客户明细（扁平化所有销售员的客户，添加 seller 字段）
+# ========== 按 (dept, sub_dept) 聚合销售员 ==========
+# salesBySubDept: {dept: {sub_dept: [{seller, perf, collect, total_debt, d30, d30_90, d90_180, d180, cycle, orders}]}}
+sales_by_subdept = {}
+for dept_name, sellers_map in cust_detail.items():
+    sales_by_subdept[dept_name] = {}
+    for seller_name, custs in sellers_map.items():
+        # 确定该销售员的三级部门（从客户记录的 sub_dept 取，取出现次数最多的）
+        sd_counts = {}
+        for c in custs:
+            sd = c.get('sub_dept', '其他')
+            sd_counts[sd] = sd_counts.get(sd, 0) + 1
+        main_sd = max(sd_counts, key=sd_counts.get) if sd_counts else '其他'
+        entry = {
+            'seller': seller_name,
+            'sub_dept': main_sd,
+            'perf': round(sum(c.get('perf', 0) for c in custs), 2),
+            'collect': round(sum(c.get('collect', 0) for c in custs), 2),
+            'total_debt': round(sum(c.get('total_debt', 0) for c in custs), 2),
+            'd30': round(sum(c.get('d30', 0) for c in custs), 2),
+            'd30_90': round(sum(c.get('d30_90', 0) for c in custs), 2),
+            'd90_180': round(sum(c.get('d90_180', 0) for c in custs), 2),
+            'd180': round(sum(c.get('d180', 0) for c in custs), 2),
+            'cycle': 0,
+            'orders': sum(c.get('orders', 0) for c in custs),
+            'custs': len(custs),
+        }
+        # 回款周期（加权平均）
+        total_weight = entry['total_debt'] + entry['collect']
+        if total_weight > 0:
+            # 用该销售员在 dashboard_data 中的 cycle 值
+            pass  # cycle 从 sales_cycle_detail 取
+        sales_by_subdept[dept_name].setdefault(main_sd, []).append(entry)
+
+# 填入 cycle（从 dashboard_data.json 的 sales_detail_data 取）
+# sales_detail_data 结构: {dept: [{"name": ..., "cycle": ...}, ...]}
+for dept_name, seller_list in data.get('sales_detail_data', {}).items():
+    if not isinstance(seller_list, list):
+        continue
+    for s_data in seller_list:
+        seller_name = s_data.get('name', '')
+        cycle = s_data.get('cycle', 0)
+        # 找到该销售员在 sales_by_subdept 中的位置
+        for sd_key, sellers in sales_by_subdept.get(dept_name, {}).items():
+            for s in sellers:
+                if s['seller'] == seller_name:
+                    s['cycle'] = round(cycle, 1) if cycle else 0
+
+# ========== 按 (dept, sub_dept) 聚合客户明细（扁平化，每个客户带 seller 字段）==========
 # custBySubDept: {dept: {sub_dept: [{customer, seller, perf, collect, total_debt, ...}]}}
 cust_by_subdept = {}
 for dept_name, sellers_map in cust_detail.items():
@@ -140,13 +187,13 @@ def get_cycle_status(cycle):
     else:
         return 'badge-good', '良好', 'highlight'
 
-# 业绩表格行：直接展示三级部门
+# 业绩表格行：直接展示三级部门，点击进入销售员列表
 perf_rows = ''
 for d in dept_list:
     badge_cls, badge_text = get_dept_status(d['completion'])
     yoy_html = fmt_yoy(d['yoy'])
     v25_cell = f'{d["v25"]:.2f}' if d['v25'] and d['v25'] > 0 else '-'
-    perf_rows += f'''<tr onclick="showCustomers('{d["key"]}','perf')" style="cursor:pointer;" title="点击查看客户业绩明细">
+    perf_rows += f'''<tr onclick="showSellers('{d["key"]}','perf')" style="cursor:pointer;" title="点击查看销售员业绩明细">
         <td>📂 {d["sub_dept"]}<br><span style="color:#8892b0;font-size:0.75em;font-weight:normal;">{d["dept"]}</span></td>
         <td class="highlight">{d["v26"]:.2f}</td>
         <td>{d["target"]:.1f}</td>
@@ -167,8 +214,7 @@ debt_rows = ''
 for d in debt_sorted:
     badge_cls, badge_text = get_debt_status(d)
     risky = d['d90_180'] + d['d180']
-    d180_cls = 'negative' if d['d180'] > 0 else ''
-    debt_rows += f'''<tr onclick="showCustomers('{d["key"]}','debt')" style="cursor:pointer;">
+    debt_rows += f'''<tr onclick="showSellers('{d["key"]}','debt')" style="cursor:pointer;">
         <td>📂 {d["sub_dept"]}<br><span style="color:#8892b0;font-size:0.75em;font-weight:normal;">{d["dept"]}</span></td>
         <td>{d["d30"]:.2f}</td>
         <td>{d["d30_90"]:.2f}</td>
@@ -183,7 +229,7 @@ cycle_sorted = sorted(dept_list, key=lambda x: x['cycle'], reverse=True)
 cycle_rows = ''
 for d in cycle_sorted:
     badge_cls, badge_text, val_cls = get_cycle_status(d['cycle'])
-    cycle_rows += f'''<tr onclick="showCustomers('{d["key"]}','cycle')" style="cursor:pointer;">
+    cycle_rows += f'''<tr onclick="showSellers('{d["key"]}','cycle')" style="cursor:pointer;">
         <td>📂 {d["sub_dept"]}<br><span style="color:#8892b0;font-size:0.75em;font-weight:normal;">{d["dept"]}</span></td>
         <td>{d["total_debt"]:.2f}</td>
         <td>{d["collect"]:.2f}</td>
@@ -228,6 +274,7 @@ debt_bar_depts = [d['sub_dept'] for d in debt_sorted[:10]]
 debt_bar_vals = [d['total_debt'] for d in debt_sorted[:10]]
 
 # JSON 序列化数据
+sales_by_subdept_json = json.dumps(sales_by_subdept, ensure_ascii=False)
 cust_by_subdept_json = json.dumps(cust_by_subdept, ensure_ascii=False)
 dept_list_json = json.dumps([{
     'dept': d['dept'], 'sub_dept': d['sub_dept'], 'key': d['key'],
@@ -246,7 +293,7 @@ html = f'''<!DOCTYPE html>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
     <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        * {{ margin:0; padding:0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #0a0e27; color: #fff; line-height: 1.6; min-height: 100vh; }}
         .container {{ max-width: 1400px; margin: 0 auto; padding: 30px 20px; }}
         .header {{ text-align: center; margin-bottom: 40px; }}
@@ -306,7 +353,7 @@ html = f'''<!DOCTYPE html>
         /* 下钻弹窗 */
         .modal-overlay {{ display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; }}
         .modal-overlay.active {{ display: flex; align-items: center; justify-content: center; }}
-        .modal {{ background: #1a2040; border-radius: 20px; padding: 30px; max-width: 900px; width: 90%; max-height: 80vh; overflow-y: auto; border: 1px solid rgba(0,212,255,0.3); }}
+        .modal {{ background: #1a2040; border-radius: 20px; padding: 30px; max-width: 1000px; width: 92%; max-height: 85vh; overflow-y: auto; border: 1px solid rgba(0,212,255,0.3); }}
         .modal-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
         .modal-title {{ color: #00d4ff; font-size: 1.2em; font-weight: 600; }}
         .modal-close {{ background: rgba(255,255,255,0.1); border: none; color: #fff; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 1.2em; display: flex; align-items: center; justify-content: center; }}
@@ -337,7 +384,7 @@ html = f'''<!DOCTYPE html>
             <div class="sub">距目标还差 {total['target']-total['v26']:.2f}万</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-icon">📉</div>
+            <div class="kpi-icon">📈</div>
             <h3>同比25Q1</h3>
             {'<div class="value '+ ('highlight' if (total['yoy'] or 0) > 0 else 'negative') +'">'+str(total['yoy'])+'%</div><div class="sub">25Q1：'+str(total['v25'])+'万</div>' if total['yoy'] is not None else '<div class="value" style="color:#8892b0;">-</div><div class="sub">25Q1数据缺失</div>'}
         </div>
@@ -376,7 +423,7 @@ html = f'''<!DOCTYPE html>
                     <div class="chart-container"><canvas id="perfPieChart"></canvas></div>
                 </div>
             </div>
-            <p class="module-desc" style="color:#00d4ff;font-weight:600;">🔽 点击任意三级部门行 → 查看该部门客户明细</p>
+            <p class="module-desc" style="color:#00d4ff;font-weight:600;">🔽 点击任意三级部门行 → 查看该部门销售员明细</p>
             <table class="dept-table">
                 <thead>
                     <tr>
@@ -449,7 +496,7 @@ html = f'''<!DOCTYPE html>
             </div>
 
             <!-- 欠款明细表 -->
-            <h3 style="color:#00d4ff;margin-bottom:15px;font-size:1.1em;">各三级部门分账龄欠款明细 <span style="color:#8892b0;font-size:0.8em;font-weight:normal;">（点击部门查看客户欠款明细）</span></h3>
+            <h3 style="color:#00d4ff;margin-bottom:15px;font-size:1.1em;">各三级部门分账龄欠款明细 <span style="color:#8892b0;font-size:0.8em;font-weight:normal;">（点击部门查看销售员欠款明细）</span></h3>
             <table class="dept-table">
                 <thead>
                     <tr>
@@ -523,7 +570,7 @@ html = f'''<!DOCTYPE html>
                 <div style="display:flex;gap:20px;flex-wrap:wrap;">
                     <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#00ff88;display:inline-block;"></span><span style="color:#ccd6f6;font-size:0.9em;">≤60天（良好）</span></div>
                     <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#ffa502;display:inline-block;"></span><span style="color:#ccd6f6;font-size:0.9em;">61-90天（一般）</span></div>
-                    <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#ff4757;display:inline-block;"></span><span style="color:#ccd6f6;font-size:0.9em;">&gt;90天（需关注）</span></div>
+                    <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#ff4757;display:inline-block;"></span><span style="color:#ccd6f6;font-size:0.9em;">>90天（需关注）</span></div>
                 </div>
             </div>
 
@@ -554,22 +601,21 @@ html = f'''<!DOCTYPE html>
     </div>
 </div>
 
-<!-- 客户明细弹窗 -->
-<div class="modal-overlay" id="salesModal" onclick="if(event.target===this)closeSalesModal()" style="z-index:1001;">
+<!-- 销售员/客户明细弹窗 -->
+<div class="modal-overlay" id="drillModal" onclick="if(event.target===this)closeDrillModal()" style="z-index:1001;">
     <div style="background:#1a2040;border-radius:20px;padding:30px;max-width:1100px;width:95%;max-height:85vh;overflow-y:auto;border:1px solid rgba(0,212,255,0.3);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-            <div class="modal-title" id="salesModalTitle">明细</div>
-            <button class="modal-close" onclick="closeSalesModal()">✕</button>
+            <div class="modal-title" id="drillModalTitle">明细</div>
+            <button class="modal-close" onclick="closeDrillModal()">✕</button>
         </div>
-        <div id="salesTableContainer"></div>
+        <div id="drillTableContainer"></div>
     </div>
 </div>
 
 <script>
 // ===== 数据 =====
 const deptData = {dept_list_json};
-
-// ===== 按 (dept, sub_dept) 索引的客户（扁平化所有销售员） =====
+const salesBySubDept = {sales_by_subdept_json};
 const custBySubDept = {cust_by_subdept_json};
 
 // ===== Tab切换 =====
@@ -590,24 +636,145 @@ function parseKey(key) {{
     return {{ dept: key.substring(0, idx), subDept: key.substring(idx + 1) }};
 }}
 
-// ===== 客户下钻（三级部门 → 客户，2层） =====
-function showCustomers(key, type) {{
+// ===== 第1层：三级部门 → 销售员列表 =====
+function showSellers(key, type) {{
     const {{ dept, subDept }} = parseKey(key);
-    if (type === 'perf') renderCustPerf(dept, subDept);
-    else if (type === 'debt') renderCustDebt(dept, subDept);
-    else if (type === 'cycle') renderCustCycle(dept, subDept);
-    else renderCustPerf(dept, subDept);
+    if (type === 'perf') renderSellerPerf(dept, subDept);
+    else if (type === 'debt') renderSellerDebt(dept, subDept);
+    else if (type === 'cycle') renderSellerCycle(dept, subDept);
+    else renderSellerPerf(dept, subDept);
 }}
 
-// ===== 客户业绩明细 =====
-function renderCustPerf(dept, subDept) {{
-    const custList = custBySubDept[dept] && custBySubDept[dept][subDept] ? [...custBySubDept[dept][subDept]] : [];
+function renderSellerPerf(dept, subDept) {{
+    const sellers = salesBySubDept[dept] && salesBySubDept[dept][subDept] ? [...salesBySubDept[dept][subDept]] : [];
+    sellers.sort((a, b) => b.perf - a.perf);
+    const rows = sellers.map(s => {{
+        const color = s.perf <= 0 ? '#8892b0' : s.perf < 2 ? '#ffa502' : '#00ff88';
+        const status = s.perf <= 0 ? '⚪ 无业绩' : s.perf < 5 ? '🟡 较低' : '🟢 正常';
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;" onclick="showSellerCustomers('${{dept}}','${{subDept}}','${{s.seller}}','perf')" title="点击查看客户明细">
+            <td style="padding:8px 6px;color:#ccd6f6;text-align:left;">📋 ${{s.seller}}</td>
+            <td style="padding:8px 6px;color:${{color}};text-align:right;font-weight:600;">${{(s.perf || 0).toFixed(2)}}</td>
+            <td style="padding:8px 6px;color:#00ff88;text-align:right;">${{(s.collect || 0).toFixed(2)}}</td>
+            <td style="padding:8px 6px;color:#8892b0;text-align:center;">${{s.orders || 0}}</td>
+            <td style="padding:8px 6px;color:#ccd6f6;text-align:center;">${{status}}</td>
+        </tr>`;
+    }}).join('');
+
+    const tp = sellers.reduce((s, x) => s + (x.perf || 0), 0).toFixed(2);
+    const tc = sellers.reduce((s, x) => s + (x.collect || 0), 0).toFixed(2);
+
+    document.getElementById('drillModalTitle').innerHTML = `📊 ${{subDept}} - 销售员业绩明细 <span style="font-size:0.7em;color:#8892b0;">（${{dept}}，共${{sellers.length}}人）</span>`;
+    document.getElementById('drillTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.82em;">
+        <thead><tr style="background:rgba(0,212,255,0.12);">
+            <th style="padding:8px 6px;color:#00d4ff;text-align:left;">销售员</th>
+            <th style="padding:8px 6px;color:#00d4ff;text-align:right;">26Q1业绩(万)</th>
+            <th style="padding:8px 6px;color:#00d4ff;text-align:right;">回款(万)</th>
+            <th style="padding:8px 6px;color:#00d4ff;text-align:center;">订单数</th>
+            <th style="padding:8px 6px;color:#00d4ff;text-align:center;">状态</th>
+        </tr></thead>
+        <tbody>${{rows}}
+        <tr style="background:rgba(0,212,255,0.08);font-weight:600;">
+            <td style="padding:8px 6px;color:#00d4ff;">合计（${{sellers.length}}人）</td>
+            <td style="padding:8px 6px;color:#00ff88;text-align:right;">${{tp}}</td>
+            <td style="padding:8px 6px;color:#00ff88;text-align:right;">${{tc}}</td>
+            <td colspan="2"></td>
+        </tr></tbody></table>
+        <p style="color:#8892b0;font-size:0.82em;margin-top:8px;">点击销售员行可查看其客户明细</p>`;
+    document.getElementById('drillModal').classList.add('active');
+}}
+
+function renderSellerDebt(dept, subDept) {{
+    const sellers = salesBySubDept[dept] && salesBySubDept[dept][subDept] ? [...salesBySubDept[dept][subDept]] : [];
+    sellers.sort((a, b) => b.total_debt - a.total_debt);
+    const rows = sellers.map(s => {{
+        const dc = s.total_debt > 50 ? '#ff4757' : s.total_debt > 20 ? '#ffa502' : '#00ff88';
+        const risky = (s.d90_180 || 0) + (s.d180 || 0);
+        const status = risky > 20 ? '🔴 高风险' : risky > 5 ? '🟡 关注' : '🟢 较好';
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;" onclick="showSellerCustomers('${{dept}}','${{subDept}}','${{s.seller}}','debt')" title="点击查看客户欠款明细">
+            <td style="padding:8px 6px;color:#ccd6f6;text-align:left;">📋 ${{s.seller}}</td>
+            <td style="padding:8px 6px;color:${{dc}};text-align:right;font-weight:600;">${{(s.total_debt || 0).toFixed(2)}}</td>
+            <td style="padding:8px 6px;color:#00ff88;text-align:right;">${{(s.d30 || 0).toFixed(2)}}</td>
+            <td style="padding:8px 6px;color:#ffa502;text-align:right;">${{(s.d30_90 || 0).toFixed(2)}}</td>
+            <td style="padding:8px 6px;color:${{(s.d90_180||0)>0?'#ff4757':'#8892b0'}};text-align:right;">${{(s.d90_180 || 0).toFixed(2)}}</td>
+            <td style="padding:8px 6px;color:${{(s.d180||0)>0?'#ff4757':'#8892b0'}};text-align:right;">${{(s.d180 || 0).toFixed(2)}}</td>
+            <td style="padding:8px 6px;color:#ccd6f6;text-align:center;">${{status}}</td>
+        </tr>`;
+    }}).join('');
+
+    const td = sellers.reduce((s, x) => s + (x.total_debt || 0), 0).toFixed(2);
+
+    document.getElementById('drillModalTitle').innerHTML = `💰 ${{subDept}} - 销售员欠款明细 <span style="font-size:0.7em;color:#8892b0;">（${{dept}}，共${{sellers.length}}人）</span>`;
+    document.getElementById('drillTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.8em;">
+        <thead><tr style="background:rgba(0,212,255,0.12);">
+            <th style="padding:8px 6px;color:#00d4ff;text-align:left;">销售员</th>
+            <th style="padding:8px 6px;color:#ff4757;text-align:right;">合计欠款(万)</th>
+            <th style="padding:8px 6px;color:#00d4ff;text-align:right;">30天内</th>
+            <th style="padding:8px 6px;color:#ffa502;text-align:right;">30-90天</th>
+            <th style="padding:8px 6px;color:#ff4757;text-align:right;">90-180天</th>
+            <th style="padding:8px 6px;color:#ff4757;text-align:right;">180天以上</th>
+            <th style="padding:8px 6px;color:#00d4ff;text-align:center;">状态</th>
+        </tr></thead>
+        <tbody>${{rows}}
+        <tr style="background:rgba(0,212,255,0.08);font-weight:600;">
+            <td style="padding:8px 6px;color:#00d4ff;">合计（${{sellers.length}}人）</td>
+            <td style="padding:8px 6px;color:#ff4757;text-align:right;">${{td}}</td>
+            <td colspan="5"></td>
+        </tr></tbody></table>
+        <p style="color:#8892b0;font-size:0.82em;margin-top:8px;">点击销售员行可查看其客户欠款明细</p>`;
+    document.getElementById('drillModal').classList.add('active');
+}}
+
+function renderSellerCycle(dept, subDept) {{
+    const sellers = salesBySubDept[dept] && salesBySubDept[dept][subDept] ? [...salesBySubDept[dept][subDept]] : [];
+    sellers.sort((a, b) => (b.cycle || 0) - (a.cycle || 0));
+    const rows = sellers.map(s => {{
+        const cycle = s.cycle || 0;
+        const cycleStr = cycle > 0 ? cycle.toFixed(1) : '-';
+        const cc = cycle <= 0 ? '#8892b0' : cycle > 90 ? '#ff4757' : cycle > 60 ? '#ffa502' : '#00ff88';
+        const status = cycle <= 0 ? '⚪ 无数据' : cycle > 90 ? '🔴 需关注' : cycle > 60 ? '🟡 偏高' : '🟢 正常';
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;" onclick="showSellerCustomers('${{dept}}','${{subDept}}','${{s.seller}}','cycle')" title="点击查看客户回款周期明细">
+            <td style="padding:8px 6px;color:#ccd6f6;text-align:left;">📋 ${{s.seller}}</td>
+            <td style="padding:8px 6px;color:#00ff88;text-align:right;">${{(s.collect || 0).toFixed(2)}}</td>
+            <td style="padding:8px 6px;color:#ffa502;text-align:right;">${{(s.total_debt || 0).toFixed(2)}}</td>
+            <td style="padding:8px 6px;color:${{cc}};text-align:right;font-weight:600;">${{cycleStr}}</td>
+            <td style="padding:8px 6px;color:#ccd6f6;text-align:center;">${{status}}</td>
+        </tr>`;
+    }}).join('');
+
+    document.getElementById('drillModalTitle').innerHTML = `⏱️ ${{subDept}} - 销售员回款周期明细 <span style="font-size:0.7em;color:#8892b0;">（${{dept}}，共${{sellers.length}}人）</span>`;
+    document.getElementById('drillTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.82em;">
+        <thead><tr style="background:rgba(0,212,255,0.12);">
+            <th style="padding:8px 6px;color:#00d4ff;text-align:left;">销售员</th>
+            <th style="padding:8px 6px;color:#00d4ff;text-align:right;">回款(万)</th>
+            <th style="padding:8px 6px;color:#00d4ff;text-align:right;">欠款(万)</th>
+            <th style="padding:8px 6px;color:#00d4ff;text-align:right;">回款周期(天)</th>
+            <th style="padding:8px 6px;color:#00d4ff;text-align:center;">状态</th>
+        </tr></thead>
+        <tbody>${{rows}}</tbody></table>
+        <p style="color:#8892b0;font-size:0.82em;margin-top:8px;">点击销售员行可查看其客户回款周期明细</p>`;
+    document.getElementById('drillModal').classList.add('active');
+}}
+
+// ===== 第2层：销售员 → 客户列表 =====
+function showSellerCustomers(dept, subDept, seller, type) {{
+    if (type === 'perf') renderSellerCustPerf(dept, subDept, seller);
+    else if (type === 'debt') renderSellerCustDebt(dept, subDept, seller);
+    else if (type === 'cycle') renderSellerCustCycle(dept, subDept, seller);
+    else renderSellerCustPerf(dept, subDept, seller);
+}}
+
+function renderSellerCustPerf(dept, subDept, seller) {{
+    // 从 custBySubDept 取该销售员的客户（跨三级部门聚合）
+    let custList = [];
+    if (custBySubDept[dept] && custBySubDept[dept][subDept]) {{
+        custList = custBySubDept[dept][subDept].filter(c => c.seller === seller);
+    }}
     custList.sort((a, b) => b.perf - a.perf);
     const rows = custList.map(c => {{
         const color = c.perf <= 0 ? '#8892b0' : c.perf < 2 ? '#ffa502' : '#00ff88';
         const status = c.perf <= 0 ? '⚪ 无业绩' : c.perf < 5 ? '🟡 较低' : '🟢 正常';
         return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-            <td style="padding:7px 5px;color:#ccd6f6;max-width:300px;word-break:break-all;">${{c.customer}}<br><span style="color:#8892b0;font-size:0.75em;">销售员：${{c.seller}}</span></td>
+            <td style="padding:7px 5px;color:#ccd6f6;max-width:300px;word-break:break-all;">${{c.customer}}</td>
             <td style="padding:7px 5px;color:${{color}};text-align:right;font-weight:600;">${{(c.perf || 0).toFixed(2)}}</td>
             <td style="padding:7px 5px;color:#00ff88;text-align:right;">${{(c.collect || 0).toFixed(2)}}</td>
             <td style="padding:7px 5px;color:#8892b0;text-align:center;">${{c.orders || 0}}</td>
@@ -618,10 +785,12 @@ function renderCustPerf(dept, subDept) {{
     const tp = custList.reduce((s, c) => s + (c.perf || 0), 0).toFixed(2);
     const tc = custList.reduce((s, c) => s + (c.collect || 0), 0).toFixed(2);
 
-    document.getElementById('salesModalTitle').innerHTML = `📊 ${{subDept}} - 客户业绩明细 <span style="font-size:0.7em;color:#8892b0;">（${{dept}}）</span>`;
-    document.getElementById('salesTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.82em;">
+    const backBtn = `<button onclick="renderSellerPerf('${{dept}}','${{subDept}}')" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#ccd6f6;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:0.85em;margin-bottom:12px;">← 返回销售员列表</button>`;
+
+    document.getElementById('drillModalTitle').innerHTML = `📊 ${{seller}} - 客户业绩明细 <span style="font-size:0.7em;color:#8892b0;">（${{subDept}}）</span>`;
+    document.getElementById('drillTableContainer').innerHTML = backBtn + `<table style="width:100%;border-collapse:collapse;font-size:0.82em;">
         <thead><tr style="background:rgba(0,212,255,0.12);">
-            <th style="padding:8px 6px;color:#00d4ff;text-align:left;">客户名称（销售员）</th>
+            <th style="padding:8px 6px;color:#00d4ff;text-align:left;">客户名称</th>
             <th style="padding:8px 6px;color:#00d4ff;text-align:right;">26Q1业绩(万)</th>
             <th style="padding:8px 6px;color:#00d4ff;text-align:right;">回款(万)</th>
             <th style="padding:8px 6px;color:#00d4ff;text-align:center;">订单数</th>
@@ -634,12 +803,14 @@ function renderCustPerf(dept, subDept) {{
             <td style="padding:8px 6px;color:#00ff88;text-align:right;">${{tc}}</td>
             <td colspan="2"></td>
         </tr></tbody></table>`;
-    document.getElementById('salesModal').classList.add('active');
+    document.getElementById('drillModal').classList.add('active');
 }}
 
-// ===== 客户欠款明细 =====
-function renderCustDebt(dept, subDept) {{
-    const custList = custBySubDept[dept] && custBySubDept[dept][subDept] ? [...custBySubDept[dept][subDept]] : [];
+function renderSellerCustDebt(dept, subDept, seller) {{
+    let custList = [];
+    if (custBySubDept[dept] && custBySubDept[dept][subDept]) {{
+        custList = custBySubDept[dept][subDept].filter(c => c.seller === seller);
+    }}
     custList.sort((a, b) => b.total_debt - a.total_debt);
     const rows = custList.map(c => {{
         const dc = c.total_debt > 50 ? '#ff4757' : c.total_debt > 20 ? '#ffa502' : '#00ff88';
@@ -647,7 +818,7 @@ function renderCustDebt(dept, subDept) {{
         const status = risky > 20 ? '🔴 高风险' : risky > 5 ? '🟡 关注' : '🟢 较好';
         const daysText = c.max_days > 0 ? `最长${{c.max_days}}天` : '-';
         return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-            <td style="padding:7px 5px;color:#ccd6f6;max-width:280px;word-break:break-all;">${{c.customer}}<br><span style="color:#8892b0;font-size:0.75em;">销售员：${{c.seller}}</span></td>
+            <td style="padding:7px 5px;color:#ccd6f6;max-width:280px;word-break:break-all;">${{c.customer}}</td>
             <td style="padding:7px 5px;color:${{dc}};text-align:right;font-weight:600;">${{(c.total_debt || 0).toFixed(2)}}</td>
             <td style="padding:7px 5px;color:#00ff88;text-align:right;">${{(c.d30 || 0).toFixed(2)}}</td>
             <td style="padding:7px 5px;color:#ffa502;text-align:right;">${{(c.d30_90 || 0).toFixed(2)}}</td>
@@ -660,10 +831,12 @@ function renderCustDebt(dept, subDept) {{
 
     const td = custList.reduce((s, c) => s + (c.total_debt || 0), 0).toFixed(2);
 
-    document.getElementById('salesModalTitle').innerHTML = `💰 ${{subDept}} - 客户欠款明细 <span style="font-size:0.7em;color:#8892b0;">（${{dept}}）</span>`;
-    document.getElementById('salesTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.78em;">
+    const backBtn = `<button onclick="renderSellerDebt('${{dept}}','${{subDept}}')" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#ccd6f6;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:0.85em;margin-bottom:12px;">← 返回销售员列表</button>`;
+
+    document.getElementById('drillModalTitle').innerHTML = `💰 ${{seller}} - 客户欠款明细 <span style="font-size:0.7em;color:#8892b0;">（${{subDept}}）</span>`;
+    document.getElementById('drillTableContainer').innerHTML = backBtn + `<table style="width:100%;border-collapse:collapse;font-size:0.78em;">
         <thead><tr style="background:rgba(0,212,255,0.12);">
-            <th style="padding:8px 6px;color:#00d4ff;text-align:left;">客户名称（销售员）</th>
+            <th style="padding:8px 6px;color:#00d4ff;text-align:left;">客户名称</th>
             <th style="padding:8px 6px;color:#ff4757;text-align:right;">合计欠款(万)</th>
             <th style="padding:8px 6px;color:#00d4ff;text-align:right;">30天内</th>
             <th style="padding:8px 6px;color:#ffa502;text-align:right;">30-90天</th>
@@ -678,12 +851,14 @@ function renderCustDebt(dept, subDept) {{
             <td style="padding:8px 6px;color:#ff4757;text-align:right;">${{td}}</td>
             <td colspan="6"></td>
         </tr></tbody></table>`;
-    document.getElementById('salesModal').classList.add('active');
+    document.getElementById('drillModal').classList.add('active');
 }}
 
-// ===== 客户回款周期明细 =====
-function renderCustCycle(dept, subDept) {{
-    const custList = custBySubDept[dept] && custBySubDept[dept][subDept] ? [...custBySubDept[dept][subDept]] : [];
+function renderSellerCustCycle(dept, subDept, seller) {{
+    let custList = [];
+    if (custBySubDept[dept] && custBySubDept[dept][subDept]) {{
+        custList = custBySubDept[dept][subDept].filter(c => c.seller === seller);
+    }}
     custList.sort((a, b) => (b.cycle || 0) - (a.cycle || 0));
     const rows = custList.map(c => {{
         const cycle = c.cycle || 0;
@@ -691,7 +866,7 @@ function renderCustCycle(dept, subDept) {{
         const cc = cycle <= 0 ? '#8892b0' : cycle > 90 ? '#ff4757' : cycle > 60 ? '#ffa502' : '#00ff88';
         const status = cycle <= 0 ? '⚪ 无数据' : cycle > 90 ? '🔴 需关注' : cycle > 60 ? '🟡 偏高' : '🟢 正常';
         return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-            <td style="padding:7px 5px;color:#ccd6f6;max-width:300px;word-break:break-all;">${{c.customer}}<br><span style="color:#8892b0;font-size:0.75em;">销售员：${{c.seller}}</span></td>
+            <td style="padding:7px 5px;color:#ccd6f6;max-width:300px;word-break:break-all;">${{c.customer}}</td>
             <td style="padding:7px 5px;color:#00ff88;text-align:right;">${{(c.collect || 0).toFixed(2)}}</td>
             <td style="padding:7px 5px;color:#ffa502;text-align:right;">${{(c.total_debt || 0).toFixed(2)}}</td>
             <td style="padding:7px 5px;color:${{cc}};text-align:right;font-weight:600;">${{cycleStr}}</td>
@@ -699,30 +874,23 @@ function renderCustCycle(dept, subDept) {{
         </tr>`;
     }}).join('');
 
-    const tc = custList.reduce((s, c) => s + (c.collect || 0), 0).toFixed(2);
-    const td = custList.reduce((s, c) => s + (c.total_debt || 0), 0).toFixed(2);
+    const backBtn = `<button onclick="renderSellerCycle('${{dept}}','${{subDept}}')" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#ccd6f6;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:0.85em;margin-bottom:12px;">← 返回销售员列表</button>`;
 
-    document.getElementById('salesModalTitle').innerHTML = `⏱️ ${{subDept}} - 客户回款周期明细 <span style="font-size:0.7em;color:#8892b0;">（${{dept}}）</span>`;
-    document.getElementById('salesTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.8em;">
+    document.getElementById('drillModalTitle').innerHTML = `⏱️ ${{seller}} - 客户回款周期明细 <span style="font-size:0.7em;color:#8892b0;">（${{subDept}}）</span>`;
+    document.getElementById('drillTableContainer').innerHTML = backBtn + `<table style="width:100%;border-collapse:collapse;font-size:0.8em;">
         <thead><tr style="background:rgba(0,212,255,0.12);">
-            <th style="padding:8px 6px;color:#00d4ff;text-align:left;">客户名称（销售员）</th>
+            <th style="padding:8px 6px;color:#00d4ff;text-align:left;">客户名称</th>
             <th style="padding:8px 6px;color:#00d4ff;text-align:right;">回款(万)</th>
             <th style="padding:8px 6px;color:#00d4ff;text-align:right;">欠款(万)</th>
             <th style="padding:8px 6px;color:#00d4ff;text-align:right;">回款周期(天)</th>
             <th style="padding:8px 6px;color:#00d4ff;text-align:center;">状态</th>
         </tr></thead>
-        <tbody>${{rows}}
-        <tr style="background:rgba(0,212,255,0.08);font-weight:600;">
-            <td style="padding:8px 6px;color:#00d4ff;">合计（${{custList.length}}个客户）</td>
-            <td style="padding:8px 6px;color:#00ff88;text-align:right;">${{tc}}</td>
-            <td style="padding:8px 6px;color:#ffa502;text-align:right;">${{td}}</td>
-            <td colspan="2"></td>
-        </tr></tbody></table>`;
-    document.getElementById('salesModal').classList.add('active');
+        <tbody>${{rows}}</tbody></table>`;
+    document.getElementById('drillModal').classList.add('active');
 }}
 
-function closeSalesModal() {{
-    document.getElementById('salesModal').classList.remove('active');
+function closeDrillModal() {{
+    document.getElementById('drillModal').classList.remove('active');
 }}
 
 // ===== 超90天三级部门 =====
@@ -732,22 +900,22 @@ function showOver90Depts() {{
         alert('当前没有回款周期超过90天的三级部门');
         return;
     }}
-    const rows = over90.map(d => `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;" onclick="showCustomers('${{d.key}}','cycle')">
+    const rows = over90.map(d => `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;" onclick="showSellers('${{d.key}}','cycle')">
         <td style="padding:8px 6px;color:#ccd6f6;">📂 ${{d.sub_dept}}</td>
         <td style="padding:8px 6px;color:#ff4757;text-align:right;font-weight:600;">${{d.cycle.toFixed(1)}}天</td>
         <td style="padding:8px 6px;color:#ffa502;text-align:right;">${{d.total_debt.toFixed(2)}}万</td>
         <td style="padding:8px 6px;text-align:center;"><span class="status-badge badge-down">需关注</span></td>
     </tr>`).join('');
-    document.getElementById('salesModalTitle').textContent = `⚠️ 回款周期超90天三级部门（共${{over90.length}}个）`;
-    document.getElementById('salesTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.85em;">
+    document.getElementById('drillModalTitle').textContent = `⚠️ 回款周期超90天三级部门（共${{over90.length}}个）`;
+    document.getElementById('drillTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.85em;">
         <thead><tr style="background:rgba(0,212,255,0.12);">
             <th style="padding:8px 6px;color:#00d4ff;">三级部门</th>
             <th style="padding:8px 6px;color:#ff4757;text-align:right;">回款周期</th>
             <th style="padding:8px 6px;color:#ffa502;text-align:right;">欠款总额</th>
             <th style="padding:8px 6px;color:#00d4ff;text-align:center;">状态</th>
         </tr></thead><tbody>${{rows}}</tbody></table>
-        <p style="color:#8892b0;font-size:0.85em;margin-top:10px;text-align:center;">点击部门行可查看客户回款周期明细</p>`;
-    document.getElementById('salesModal').classList.add('active');
+        <p style="color:#8892b0;font-size:0.85em;margin-top:10px;text-align:center;">点击部门行可查看销售员回款周期明细</p>`;
+    document.getElementById('drillModal').classList.add('active');
 }}
 
 // ===== 图表 =====
@@ -858,7 +1026,6 @@ new Chart(document.getElementById('cycleChart'), {{
         plugins: {{
             legend: {{ display: false }},
             datalabels: {{ color: '#fff', font: {{ size: 11 }}, anchor: 'end', align: 'end', formatter: v => v.toFixed(1) + '天' }},
-            annotation: {{ annotations: {{ line1: {{ type: 'line', xMin: 90, xMax: 90, borderColor: '#ff4757', borderWidth: 2, borderDash: [5, 5] }} }} }}
         }},
         scales: {{
             x: {{ ticks: {{ color: '#8892b0' }}, grid: {{ color: 'rgba(255,255,255,0.08)' }}, max: Math.max(...{chart_cycle_vals}) * 1.15 }},
