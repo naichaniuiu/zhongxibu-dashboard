@@ -328,6 +328,7 @@ seller_data = defaultdict(lambda: {
     'perf': 0.0, 'collect': 0.0, 'total_debt': 0.0,
     'd30': 0.0, 'd30_90': 0.0, 'd90_180': 0.0, 'd180': 0.0,
     'dept': '其他',
+    'sub_dept_list': [],
 })
 
 for r in perf_records:
@@ -335,6 +336,8 @@ for r in perf_records:
     s['perf'] += r['perf']
     s['collect'] += r['collect']
     s['dept'] = r['dept']
+    if r.get('sub_dept'):
+        s['sub_dept_list'].append(r['sub_dept'])
 
 for r in debt_records:
     s = seller_data[r['seller_name']]
@@ -352,10 +355,17 @@ for r in debt_records:
 # 按部门聚合销售员（用于弹窗）
 sales_detail_data = defaultdict(list)
 sales_cycle_detail = defaultdict(list)
+seller_sub_dept = {}  # seller name -> most common sub_dept
 for seller, s in seller_data.items():
     dept = s['dept']
+    # 取最常见的三级部门
+    sub_dept = '其他'
+    if s['sub_dept_list']:
+        sub_dept = Counter(s['sub_dept_list']).most_common(1)[0][0]
+    seller_sub_dept[seller] = sub_dept
     sales_detail_data[dept].append({
         'name': seller,
+        'sub_dept': sub_dept,
         'perf': round(s['perf'], 2),
         'collect': round(s['collect'], 2),
         'total_debt': round(s['total_debt'], 2),
@@ -368,6 +378,7 @@ for seller, s in seller_data.items():
     cycle = weighted_avg(c_items)
     sales_cycle_detail[dept].append({
         'name': seller,
+        'sub_dept': seller_sub_dept.get(seller, '其他'),
         'debt_amt': round(s['total_debt'] * 10000, 2),
         'rec_amt': round(s['collect'] * 10000, 2),
         'cycle': round(cycle, 1),
