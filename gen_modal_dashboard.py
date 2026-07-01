@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 完全对齐原模板弹窗下钻风格的数据看板生成器
-下钻逻辑：部门行点击 -> 弹窗销售员列表 -> 点击销售员名 -> 弹窗切换客户明细（带返回按钮）
+下钻逻辑：部门行点击 -> 弹窗三级部门列表 -> 点击三级部门 -> 弹窗销售员列表 -> 点击销售员名 -> 弹窗切换客户明细（带返回按钮）
 """
 import json, sys, os
 from datetime import datetime, timedelta
@@ -56,9 +56,38 @@ sales_cycle_raw = data['sales_cycle_detail']
 sales_cycle = {}
 for dept_name, sellers in sales_cycle_raw.items():
     sales_cycle[dept_name] = [
-        {'name': s['name'], 'debt_amt': s.get('debt_amt', 0), 'rec_amt': s.get('rec_amt', 0), 'cycle': round(s.get('cycle', 0), 1)}
+        {'name': s['name'], 'sub_dept': s.get('sub_dept', '其他'), 'debt_amt': s.get('debt_amt', 0), 'rec_amt': s.get('rec_amt', 0), 'cycle': round(s.get('cycle', 0), 1)}
         for s in sellers
     ]
+
+# ===== 构建三级部门聚合数据 =====
+# sub_dept_agg: {dept: [{sub_dept, perf, collect, total_debt, d30, d30_90, d90_180, d180, sales, avg_cycle}]}
+sub_dept_agg = {}
+for dept_name, sellers in sales_detail.items():
+    from collections import defaultdict
+    sd_map = defaultdict(lambda: {'perf': 0.0, 'collect': 0.0, 'total_debt': 0.0, 'd30': 0.0, 'd30_90': 0.0, 'd90_180': 0.0, 'd180': 0.0, 'sales': 0, 'cycle_sum': 0.0, 'cycle_count': 0})
+    for s in sellers:
+        sd = s.get('sub_dept', '其他')
+        sd_map[sd]['perf'] += s['perf']
+        sd_map[sd]['collect'] += s['collect']
+        sd_map[sd]['total_debt'] += s['total_debt']
+        sd_map[sd]['d30'] += s['d30']
+        sd_map[sd]['d30_90'] += s['d30_90']
+        sd_map[sd]['d90_180'] += s['d90_180']
+        sd_map[sd]['d180'] += s['d180']
+        sd_map[sd]['sales'] += 1
+    # 从 sales_cycle 中取回款周期
+    for s in sales_cycle.get(dept_name, []):
+        sd = s.get('sub_dept', '其他')
+        if s['cycle'] > 0:
+            sd_map[sd]['cycle_sum'] += s['cycle']
+            sd_map[sd]['cycle_count'] += 1
+    # 排序：按业绩降序
+    sub_dept_agg[dept_name] = sorted(
+        [{'sub_dept': sd, **vals, 'avg_cycle': round(vals['cycle_sum']/vals['cycle_count'], 1) if vals['cycle_count'] > 0 else 0}
+         for sd, vals in sd_map.items()],
+        key=lambda x: -x['perf']
+    )
 
 # 构建 deptCustPerfData: {dept: [{name:seller, customers:[{name:cust, perf, collect, orders}]}]}
 # 格式用于业绩tab下点击销售员后展示客户
@@ -243,6 +272,7 @@ debt_bar_vals = [d['total_debt'] for d in debt_sorted[:8]]
 # JSON序列化数据
 sales_detail_json = json.dumps(sales_detail, ensure_ascii=False)
 sales_cycle_json = json.dumps(sales_cycle, ensure_ascii=False)
+sub_dept_agg_json = json.dumps(sub_dept_agg, ensure_ascii=False)
 dept_cust_perf_json = json.dumps(dept_cust_perf, ensure_ascii=False)
 dept_cust_debt_json = json.dumps(dept_cust_debt, ensure_ascii=False)
 cust_cycle_json = json.dumps(cust_cycle_data, ensure_ascii=False)
@@ -615,6 +645,10 @@ const salesDetailData = {sales_detail_json};
 // ===== 销售员回款周期数据（元）=====
 const salesCycleData = {sales_cycle_json};
 
+// ===== 三级部门聚合数据 =====
+// subDeptAggData: {{dept: [{{sub_dept, perf, collect, total_debt, d30, d30_90, d90_180, d180, sales, avg_cycle}}]}}
+const subDeptAggData = {sub_dept_agg_json};
+
 // ===== 客户业绩数据 =====
 // deptCustPerfData: {{dept: [{{name:seller, customers:[{{name, perf, collect, orders}}]}}]}}
 const deptCustPerfData = {dept_cust_perf_json};
@@ -653,7 +687,7 @@ function showDeptDetail(dept) {{
             </div>
         </div>
         <div style="text-align:center;margin-top:10px;">
-            <button onclick="showSalesDetail('${{dept}}', getCurrentTab())" style="background:linear-gradient(135deg,#00d4ff,#7b2ff7);color:#fff;border:none;border-radius:8px;padding:10px 28px;font-size:1em;cursor:pointer;">📋 查看销售员明细</button>
+            <button onclick="showSalesDetail('${{dept}}', getCurrentTab())" style="background:linear-gradient(135deg,#00d4ff,#7b2ff7);color:#fff;border:none;border-radius:8px;padding:10px 28px;font-size:1em;cursor:pointer;">📋 查看三级部门明细</button>
         </div>`;
     document.getElementById('modalOverlay').classList.add('active');
 }}
@@ -663,15 +697,126 @@ function closeModal() {{
 
 // ===== 销售员明细弹窗 =====
 function showSalesDetail(dept, type) {{
-    if (type === 'perf') renderSalesPerf(dept);
-    else if (type === 'debt') renderSalesDebt(dept);
-    else if (type === 'cycle') renderSalesCycle(dept);
-    else renderSalesPerf(dept);
+    if (type === 'perf') renderSubDeptPerf(dept);
+    else if (type === 'debt') renderSubDeptDebt(dept);
+    else if (type === 'cycle') renderSubDeptCycle(dept);
+    else renderSubDeptPerf(dept);
 }}
 
-function renderSalesPerf(dept) {{
-    const list = [...(salesDetailData[dept] || [])];
+// ===== 三级部门下钻 =====
+function renderSubDeptPerf(dept) {{
+    const list = [...(subDeptAggData[dept] || [])];
     list.sort((a, b) => b.perf - a.perf);
+    const rows = list.map(sd => {{
+        const color = sd.perf < 0 ? '#ff4757' : sd.perf < 100 ? '#ffa502' : '#00ff88';
+        const completion = sd.perf / {kpi['total_target']} * 100;
+        const badge = completion >= 60 ? '<span style="background:rgba(0,212,255,0.2);color:#00d4ff;padding:2px 8px;border-radius:10px;font-size:0.8em;">较好</span>' : completion >= 30 ? '<span style="background:rgba(255,165,2,0.2);color:#ffa502;padding:2px 8px;border-radius:10px;font-size:0.8em;">待关注</span>' : '<span style="background:rgba(255,71,87,0.2);color:#ff4757;padding:2px 8px;border-radius:10px;font-size:0.8em;">严重下滑</span>';
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;" onclick="renderSalesPerfBySubDept('${{dept}}','${{sd.sub_dept}}')">
+            <td style="padding:10px 8px;color:#00d4ff;font-weight:600;text-align:left;">📂 ${{sd.sub_dept}}</td>
+            <td style="padding:10px 8px;color:${{color}};text-align:right;font-weight:600;">${{sd.perf.toFixed(2)}}</td>
+            <td style="padding:10px 8px;color:#00ff88;text-align:right;">${{sd.collect.toFixed(2)}}</td>
+            <td style="padding:10px 8px;color:#ccd6f6;text-align:center;">${{completion.toFixed(1)}}%</td>
+            <td style="padding:10px 8px;color:#ccd6f6;text-align:center;">${{sd.sales}}</td>
+            <td style="padding:10px 8px;text-align:center;">${{badge}}</td>
+        </tr>`;
+    }}).join('');
+    const tp = list.reduce((s, v) => s + v.perf, 0).toFixed(2);
+    const tc = list.reduce((s, v) => s + v.collect, 0).toFixed(2);
+    const ts = list.reduce((s, v) => s + v.sales, 0);
+    document.getElementById('salesModalTitle').innerHTML = `📊 ${{dept}} - 三级部门业绩 <span style="font-size:0.7em;color:#8892b0;">（点击三级部门查看销售员明细）</span>`;
+    document.getElementById('salesTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.85em;">
+        <thead><tr style="background:rgba(0,212,255,0.12);">
+            <th style="padding:10px 8px;color:#00d4ff;text-align:left;">三级部门</th>
+            <th style="padding:10px 8px;color:#00d4ff;text-align:right;">26Q1业绩(万)</th>
+            <th style="padding:10px 8px;color:#00d4ff;text-align:right;">回款(万)</th>
+            <th style="padding:10px 8px;color:#00d4ff;text-align:center;">完成率</th>
+            <th style="padding:10px 8px;color:#00d4ff;text-align:center;">销售员数</th>
+            <th style="padding:10px 8px;color:#00d4ff;text-align:center;">状态</th>
+        </tr></thead>
+        <tbody>${{rows}}
+        <tr style="background:rgba(0,212,255,0.08);font-weight:600;">
+            <td style="padding:10px 8px;color:#00d4ff;">合计（${{ts}}人）</td>
+            <td style="padding:10px 8px;color:#00ff88;text-align:right;">${{tp}}</td>
+            <td style="padding:10px 8px;color:#00ff88;text-align:right;">${{tc}}</td>
+            <td colspan="3"></td>
+        </tr></tbody></table>`;
+    document.getElementById('salesModal').classList.add('active');
+}}
+
+function renderSubDeptDebt(dept) {{
+    const list = [...(subDeptAggData[dept] || [])];
+    list.sort((a, b) => b.total_debt - a.total_debt);
+    const rows = list.map(sd => {{
+        const dc = sd.total_debt > 50 ? '#ff4757' : sd.total_debt > 20 ? '#ffa502' : '#00ff88';
+        const risky = sd.d90_180 + sd.d180;
+        const badge = risky > 50 || (sd.total_debt > 0 && risky/sd.total_debt > 0.3) ? '<span style="background:rgba(255,71,87,0.2);color:#ff4757;padding:2px 8px;border-radius:10px;font-size:0.8em;">高风险</span>' : risky > 10 || sd.total_debt > 100 ? '<span style="background:rgba(255,165,2,0.2);color:#ffa502;padding:2px 8px;border-radius:10px;font-size:0.8em;">关注</span>' : '<span style="background:rgba(0,212,255,0.2);color:#00d4ff;padding:2px 8px;border-radius:10px;font-size:0.8em;">较好</span>';
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;" onclick="renderSalesDebtBySubDept('${{dept}}','${{sd.sub_dept}}')">
+            <td style="padding:10px 8px;color:#00d4ff;font-weight:600;text-align:left;">📂 ${{sd.sub_dept}}</td>
+            <td style="padding:10px 8px;color:#00ff88;text-align:right;">${{sd.d30.toFixed(2)}}</td>
+            <td style="padding:10px 8px;color:#ffa502;text-align:right;">${{sd.d30_90.toFixed(2)}}</td>
+            <td style="padding:10px 8px;color:#ff4757;text-align:right;">${{sd.d90_180.toFixed(2)}}</td>
+            <td style="padding:10px 8px;color:${{sd.d180>0?'#ff4757':'#8892b0'}};text-align:right;">${{sd.d180.toFixed(2)}}</td>
+            <td style="padding:10px 8px;color:${{dc}};text-align:right;font-weight:600;">${{sd.total_debt.toFixed(2)}}</td>
+            <td style="padding:10px 8px;text-align:center;">${{badge}}</td>
+        </tr>`;
+    }}).join('');
+    const td = list.reduce((s, v) => s + v.total_debt, 0).toFixed(2);
+    document.getElementById('salesModalTitle').innerHTML = `💰 ${{dept}} - 三级部门欠款 <span style="font-size:0.7em;color:#8892b0;">（点击三级部门查看销售员明细）</span>`;
+    document.getElementById('salesTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.82em;">
+        <thead><tr style="background:rgba(0,212,255,0.12);">
+            <th style="padding:10px 8px;color:#00d4ff;text-align:left;">三级部门</th>
+            <th style="padding:10px 8px;color:#00d4ff;text-align:right;">30天内(万)</th>
+            <th style="padding:10px 8px;color:#ffa502;text-align:right;">30-90天(万)</th>
+            <th style="padding:10px 8px;color:#ff4757;text-align:right;">90-180天(万)</th>
+            <th style="padding:10px 8px;color:#ff4757;text-align:right;">180天+(万)</th>
+            <th style="padding:10px 8px;color:#ff4757;text-align:right;">合计(万)</th>
+            <th style="padding:10px 8px;color:#00d4ff;text-align:center;">状态</th>
+        </tr></thead>
+        <tbody>${{rows}}
+        <tr style="background:rgba(0,212,255,0.08);font-weight:600;">
+            <td style="padding:10px 8px;color:#00d4ff;">合计</td>
+            <td colspan="5"></td>
+            <td style="padding:10px 8px;color:#ff4757;text-align:right;font-weight:600;">${{td}}</td>
+            <td></td>
+        </tr></tbody></table>`;
+    document.getElementById('salesModal').classList.add('active');
+}}
+
+function renderSubDeptCycle(dept) {{
+    const list = [...(subDeptAggData[dept] || [])];
+    list.sort((a, b) => b.avg_cycle - a.avg_cycle);
+    const rows = list.map(sd => {{
+        const cycle = sd.avg_cycle;
+        const cc = cycle <= 0 ? '#8892b0' : cycle > 90 ? '#ff4757' : cycle > 60 ? '#ffa502' : '#00ff88';
+        const badge = cycle <= 0 ? '<span style="background:rgba(255,255,255,0.1);color:#8892b0;padding:2px 8px;border-radius:10px;font-size:0.8em;">无数据</span>' : cycle > 90 ? '<span style="background:rgba(255,71,87,0.2);color:#ff4757;padding:2px 8px;border-radius:10px;font-size:0.8em;">需关注</span>' : cycle > 60 ? '<span style="background:rgba(255,165,2,0.2);color:#ffa502;padding:2px 8px;border-radius:10px;font-size:0.8em;">偏高</span>' : '<span style="background:rgba(0,255,136,0.2);color:#00ff88;padding:2px 8px;border-radius:10px;font-size:0.8em;">正常</span>';
+        const cycleStr = cycle > 0 ? cycle.toFixed(1) + '天' : '-';
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;" onclick="renderSalesCycleBySubDept('${{dept}}','${{sd.sub_dept}}')">
+            <td style="padding:10px 8px;color:#00d4ff;font-weight:600;text-align:left;">📂 ${{sd.sub_dept}}</td>
+            <td style="padding:10px 8px;color:#ff4757;text-align:right;">${{sd.total_debt.toFixed(2)}}万</td>
+            <td style="padding:10px 8px;color:#00ff88;text-align:right;">${{sd.collect.toFixed(2)}}万</td>
+            <td style="padding:10px 8px;color:${{cc}};text-align:right;font-weight:600;">${{cycleStr}}</td>
+            <td style="padding:10px 8px;text-align:center;">${{badge}}</td>
+        </tr>`;
+    }}).join('');
+    document.getElementById('salesModalTitle').innerHTML = `⏱️ ${{dept}} - 三级部门回款周期 <span style="font-size:0.7em;color:#8892b0;">（点击三级部门查看销售员明细）</span>`;
+    document.getElementById('salesTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.85em;">
+        <thead><tr style="background:rgba(0,212,255,0.12);">
+            <th style="padding:10px 8px;color:#00d4ff;text-align:left;">三级部门</th>
+            <th style="padding:10px 8px;color:#ff4757;text-align:right;">欠款总额(万)</th>
+            <th style="padding:10px 8px;color:#00ff88;text-align:right;">回款金额(万)</th>
+            <th style="padding:10px 8px;color:#00d4ff;text-align:right;">回款周期(天)</th>
+            <th style="padding:10px 8px;color:#00d4ff;text-align:center;">状态</th>
+        </tr></thead>
+        <tbody>${{rows}}</tbody></table>`;
+    document.getElementById('salesModal').classList.add('active');
+}}
+
+function renderSalesPerf(dept, subDept) {{
+    const allList = [...(salesDetailData[dept] || [])];
+    const list = subDept ? allList.filter(s => (s.sub_dept || '其他') === subDept) : allList;
+    list.sort((a, b) => b.perf - a.perf);
+    const subDeptLabel = subDept ? ` / ${{subDept}}` : '';
+    const backBtn = subDept ? `<button onclick="renderSubDeptPerf('${{dept}}')" style="margin-left:12px;background:rgba(0,212,255,0.2);border:1px solid rgba(0,212,255,0.4);color:#00d4ff;border-radius:6px;padding:3px 12px;font-size:0.85em;cursor:pointer;">← 返回三级部门</button>` : '';
     const rows = list.map(s => {{
         const color = s.perf < 0 ? '#ff4757' : s.perf < 5 ? '#ffa502' : '#00ff88';
         const status = s.perf < 0 ? '🔴 无业绩' : s.perf < 5 ? '🟡 待提升' : '🟢 正常';
@@ -689,7 +834,7 @@ function renderSalesPerf(dept) {{
     }}).join('');
     const tp = list.reduce((s, v) => s + v.perf, 0).toFixed(2);
     const tc = list.reduce((s, v) => s + v.collect, 0).toFixed(2);
-    document.getElementById('salesModalTitle').innerHTML = `📊 ${{dept}} - 销售员业绩明细 <span style="font-size:0.7em;color:#8892b0;">（点击蓝色销售员名查看客户明细）</span>`;
+    document.getElementById('salesModalTitle').innerHTML = `📊 ${{dept}}${{subDeptLabel}} - 销售员业绩明细 <span style="font-size:0.7em;color:#8892b0;">（点击蓝色销售员名查看客户明细）</span> ${{backBtn}}`;
     document.getElementById('salesTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.85em;">
         <thead><tr style="background:rgba(0,212,255,0.12);">
             <th style="padding:8px 6px;color:#00d4ff;">销售员</th>
@@ -707,9 +852,16 @@ function renderSalesPerf(dept) {{
     document.getElementById('salesModal').classList.add('active');
 }}
 
-function renderSalesDebt(dept) {{
-    const list = [...(salesDetailData[dept] || [])];
+function renderSalesPerfBySubDept(dept, subDept) {{
+    renderSalesPerf(dept, subDept);
+}}
+
+function renderSalesDebt(dept, subDept) {{
+    const allList = [...(salesDetailData[dept] || [])];
+    const list = subDept ? allList.filter(s => (s.sub_dept || '其他') === subDept) : allList;
     list.sort((a, b) => b.total_debt - a.total_debt);
+    const subDeptLabel = subDept ? ` / ${{subDept}}` : '';
+    const backBtn = subDept ? `<button onclick="renderSubDeptDebt('${{dept}}')" style="margin-left:12px;background:rgba(0,212,255,0.2);border:1px solid rgba(0,212,255,0.4);color:#00d4ff;border-radius:6px;padding:3px 12px;font-size:0.85em;cursor:pointer;">← 返回三级部门</button>` : '';
     const rows = list.map(s => {{
         const dc = s.total_debt > 50 ? '#ff4757' : s.total_debt > 20 ? '#ffa502' : '#00ff88';
         const status = s.total_debt > 50 ? '🔴 高风险' : s.total_debt > 20 ? '🟡 关注' : '🟢 较好';
@@ -728,7 +880,7 @@ function renderSalesDebt(dept) {{
         </tr>`;
     }}).join('');
     const td = list.reduce((s, v) => s + v.total_debt, 0).toFixed(2);
-    document.getElementById('salesModalTitle').innerHTML = `💰 ${{dept}} - 销售员欠款明细 <span style="font-size:0.7em;color:#8892b0;">（点击蓝色销售员名查看客户明细）</span>`;
+    document.getElementById('salesModalTitle').innerHTML = `💰 ${{dept}}${{subDeptLabel}} - 销售员欠款明细 <span style="font-size:0.7em;color:#8892b0;">（点击蓝色销售员名查看客户明细）</span> ${{backBtn}}`;
     document.getElementById('salesTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.82em;">
         <thead><tr style="background:rgba(0,212,255,0.12);">
             <th style="padding:8px 6px;color:#00d4ff;">销售员</th>
@@ -748,9 +900,16 @@ function renderSalesDebt(dept) {{
     document.getElementById('salesModal').classList.add('active');
 }}
 
-function renderSalesCycle(dept) {{
-    const list = [...(salesCycleData[dept] || [])];
+function renderSalesDebtBySubDept(dept, subDept) {{
+    renderSalesDebt(dept, subDept);
+}}
+
+function renderSalesCycle(dept, subDept) {{
+    const allList = [...(salesCycleData[dept] || [])];
+    const list = subDept ? allList.filter(s => (s.sub_dept || '其他') === subDept) : allList;
     list.sort((a, b) => b.cycle - a.cycle);
+    const subDeptLabel = subDept ? ` / ${{subDept}}` : '';
+    const backBtn = subDept ? `<button onclick="renderSubDeptCycle('${{dept}}')" style="margin-left:12px;background:rgba(0,212,255,0.2);border:1px solid rgba(0,212,255,0.4);color:#00d4ff;border-radius:6px;padding:3px 12px;font-size:0.85em;cursor:pointer;">← 返回三级部门</button>` : '';
     const rows = list.map(s => {{
         const cycle = s.cycle;
         const cycleStr = cycle > 0 ? cycle.toFixed(1) : '-';
@@ -769,7 +928,7 @@ function renderSalesCycle(dept) {{
     }}).join('');
     const tc = list.reduce((s, v) => s + v.rec_amt, 0);
     const td = list.reduce((s, v) => s + v.debt_amt, 0);
-    document.getElementById('salesModalTitle').innerHTML = `⏱️ ${{dept}} - 销售员回款周期明细 <span style="font-size:0.7em;color:#8892b0;">（点击蓝色销售员名查看客户明细）</span>`;
+    document.getElementById('salesModalTitle').innerHTML = `⏱️ ${{dept}}${{subDeptLabel}} - 销售员回款周期明细 <span style="font-size:0.7em;color:#8892b0;">（点击蓝色销售员名查看客户明细）</span> ${{backBtn}}`;
     document.getElementById('salesTableContainer').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.85em;">
         <thead><tr style="background:rgba(0,212,255,0.12);">
             <th style="padding:8px 6px;color:#00d4ff;">销售员</th>
@@ -786,6 +945,10 @@ function renderSalesCycle(dept) {{
             <td colspan="2"></td>
         </tr></tbody></table>`;
     document.getElementById('salesModal').classList.add('active');
+}}
+
+function renderSalesCycleBySubDept(dept, subDept) {{
+    renderSalesCycle(dept, subDept);
 }}
 
 function closeSalesModal() {{
