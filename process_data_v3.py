@@ -237,9 +237,11 @@ for r in load_rows(DATA_FILE, sheet_idx=0):
     dept2 = normalize_dept2(raw_dept2, raw_sub_dept, seller_name)
     if dept2 is None:
         continue  # 武汉仓等删除部门，跳过
+    sub_dept = normalize_sub_dept(dept2, raw_sub_dept, raw_dept2, seller_name)
     perf_records_25.append({
         'dept': dept2,
         'seller_name': seller_name,
+        'sub_dept': sub_dept,  # 25Q1 也有三级部门字段，一并保留
         'perf': to_wan(r.get('业绩总金额')),
     })
 print(f'  25Q1 performance records: {len(perf_records_25)}')
@@ -272,6 +274,7 @@ for r in load_rows(DATA_FILE, sheet_idx=2):
         'seller_name': seller_name,
         'seller_status': str(r.get('销售员状态') or '').strip().replace('\t', ''),
         'dept': dept2,
+        'sub_dept': '__pending__',  # 后面按销售员映射填充
         'debt': debt_val,
         'days': days,
     })
@@ -390,6 +393,11 @@ for seller, s in seller_data.items():
 # 转为普通 dict
 sales_detail_data = dict(sales_detail_data)
 sales_cycle_detail = dict(sales_cycle_detail)
+
+# 回填 debt_records 的 sub_dept（欠款数据原始无三级部门字段，按销售员业绩数据中的三级部门映射）
+for r in debt_records:
+    if r['sub_dept'] == '__pending__':
+        r['sub_dept'] = seller_sub_dept.get(r['seller_name'], '其他')
 
 # ============================================================
 # 6. 计算 KPI
@@ -525,6 +533,91 @@ else:
 over90_depts = [d['dept'] for d in cycles_with_data if d['cycle'] > 90]
 
 # ============================================================
+# 7b. 按三级部门聚合（用于看板直接展示三级部门）
+# ============================================================
+print('Aggregating by sub-department...')
+
+# 26Q1 三级部门业绩
+subdept_perf = defaultdict(lambda: {'perf': 0.0, 'collect': 0.0, 'sales': set(), 'orders': set()})
+for r in perf_records:
+    key = (r['dept'], r['sub_dept'])
+    sd = subdept_perf[key]
+    sd['perf'] += r['perf']
+    sd['collect'] += r['collect']
+    sd['sales'].add(r['seller_name'])
+    sd['orders'].add(r['order_no'])
+
+# 25Q1 三级部门业绩（25Q1 数据有三级部门字段）
+subdept_perf_25 = defaultdict(float)
+for r in perf_records_25:
+    subdept_perf_25[(r['dept'], r['sub_dept'])] += r['perf']
+
+# 2026 年三级部门欠款
+subdept_debt = defaultdict(lambda: {'d30': 0.0, 'd30_90': 0.0, 'd90_180': 0.0, 'd180': 0.0, 'total_debt': 0.0})
+for r in debt_records:
+    key = (r['dept'], r['sub_dept'])
+    sd = subdept_debt[key]
+    sd['total_debt'] += r['debt']
+    if r['days'] <= 30:
+        sd['d30'] += r['debt']
+    elif r['days'] <= 90:
+        sd['d30_90'] += r['debt']
+    elif r['days'] <= 180:
+        sd['d90_180'] += r['debt']
+    else:
+        sd['d180'] += r['debt']
+
+# 按三级部门聚合回款周期
+subdept_cycle_items = defaultdict(list)
+seller_sub_dept_map = seller_sub_dept  # 复用前面构建的映射
+# 反查：每个seller的(部门,三级部门)
+seller_dept_subdept = {}
+for seller, sub_dept in seller_sub_dept_map.items():
+    dept = seller_data[seller]['dept']
+    seller_dept_subdept[seller] = (dept, sub_dept)
+# 用 cycle_records 中的seller找到对应的(部门,三级部门)
+for rec in cycle_records:
+    key = seller_dept_subdept.get(rec['seller'])
+    if key:
+        subdept_cycle_items[key].append(rec)
+
+# 合并三级部门数据
+all_subdepts = set(subdept_perf.keys()) | set(subdept_debt.keys())
+subdept_data = []
+for key in sorted(all_subdepts):
+    dept, sub_dept = key
+    p = subdept_perf.get(key, {'perf': 0.0, 'collect': 0.0, 'sales': set(), 'orders': set()})
+    d = subdept_debt.get(key, {'d30': 0.0, 'd30_90': 0.0, 'd90_180': 0.0, 'd180': 0.0, 'total_debt': 0.0})
+    # 25Q1 同比：25Q1 数据也有三级部门字段，直接取
+    v25_sub = subdept_perf_25.get(key, 0.0)
+    yoy = round((p['perf'] - v25_sub) / v25_sub * 100, 1) if v25_sub > 0 else None
+    # 目标：按业绩比例拆分
+    target = TARGET_TOTAL * (p['perf'] / total_perf) if total_perf > 0 else 0.0
+    completion = round(p['perf'] / target * 100, 1) if target > 0 else 0.0
+    cycle = weighted_avg(subdept_cycle_items.get(key, []))
+    subdept_data.append({
+        'dept': dept,
+        'sub_dept': sub_dept,
+        'key': f'{dept}|{sub_dept}',  # 唯一标识
+        'v26': round(p['perf'], 2),
+        'v25': round(v25_sub, 2) if v25_sub > 0 else None,
+        'yoy': yoy,
+        'target': round(target, 2),
+        'completion': completion,
+        'sales': len(p['sales']),
+        'd30': round(d['d30'], 2),
+        'd30_90': round(d['d30_90'], 2),
+        'd90_180': round(d['d90_180'], 2),
+        'd180': round(d['d180'], 2),
+        'total_debt': round(d['total_debt'], 2),
+        'collect': round(p['collect'], 2),
+        'cycle': round(cycle, 1),
+    })
+
+# 排序：按业绩金额降序
+subdept_data.sort(key=lambda x: -x['v26'])
+
+# ============================================================
 # 8. 输出 dashboard_data.json
 # ============================================================
 print('Writing dashboard_data.json...')
@@ -574,6 +667,7 @@ dashboard_data = {
         'over90_count': len(over90_depts),
     },
     'dept_data': dept_data,
+    'subdept_data': subdept_data,
     'sales_detail_data': sales_detail_data,
     'sales_cycle_detail': sales_cycle_detail,
     'high_risk_customers': high_risk_customers,

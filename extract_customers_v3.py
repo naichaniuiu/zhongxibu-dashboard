@@ -192,6 +192,7 @@ for r in load_rows(DATA_FILE, sheet_idx=1):
     
     c = result[dept][seller][customer]
     c['customer'] = customer
+    c['sub_dept'] = sub_dept
     c['perf'] += perf
     c['collect'] += collect
     c['total_debt'] += debt
