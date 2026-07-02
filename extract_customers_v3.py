@@ -284,6 +284,7 @@ for dept, sellers in result.items():
                 continue
             customers_list.append({
                 'customer': data['customer'],
+                'sub_dept': data.get('sub_dept', '其他') or '其他',
                 'perf': round(data['perf'], 2),
                 'collect': round(data['collect'], 2),
                 'total_debt': round(data['total_debt'], 2),
