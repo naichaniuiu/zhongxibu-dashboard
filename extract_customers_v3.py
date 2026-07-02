@@ -195,7 +195,7 @@ for r in load_rows(DATA_FILE, sheet_idx=1):
     c['sub_dept'] = sub_dept
     c['perf'] += perf
     c['collect'] += collect
-    c['total_debt'] += debt
+    # 注：欠款金额只在"欠款数据"Sheet中累计，避免与业绩Sheet中的欠款金额重复累加
     c['orders'] += 1
 
 # 2. 欠款数据：整个文件所有行直接求和，无过滤
