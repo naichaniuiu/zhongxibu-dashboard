@@ -84,9 +84,9 @@ for dept_name, sellers_map in cust_detail.items():
             pass  # cycle 从 sales_cycle_detail 取
         sales_by_subdept[dept_name].setdefault(main_sd, []).append(entry)
 
-# 填入 cycle（从 dashboard_data.json 的 sales_detail_data 取）
-# sales_detail_data 结构: {dept: [{"name": ..., "cycle": ...}, ...]}
-for dept_name, seller_list in data.get('sales_detail_data', {}).items():
+# 填入 cycle（从 dashboard_data.json 的 sales_cycle_detail 取）
+# sales_cycle_detail 结构: {dept: [{"name": ..., "cycle": ...}, ...]}
+for dept_name, seller_list in data.get('sales_cycle_detail', {}).items():
     if not isinstance(seller_list, list):
         continue
     for s_data in seller_list:
