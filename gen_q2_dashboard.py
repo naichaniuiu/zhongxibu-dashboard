@@ -67,6 +67,19 @@ def weighted_avg(items):
         return 0.0
     return sum(x['days'] * x['amount'] for x in items) / total_w
 
+def cycle_weighted_avg(items):
+    """回款周期 = Σ(订单金额 × 账龄) ÷ 回款总金额
+    订单金额: 每笔订单的业绩总金额（从业绩数据查找，fallback=欠款金额+已认款金额）
+    账龄: 回款日期 - 业绩日期
+    分母: 回款总金额（认款协同金额之和）
+    """
+    if not items:
+        return 0.0
+    total_payment = sum(x['amount'] for x in items)
+    if total_payment <= 0:
+        return 0.0
+    return sum(x['order_amount'] * x['days'] for x in items) / total_payment
+
 def load_rows(path, sheet_idx=0):
     wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
     ws = wb[wb.sheetnames[sheet_idx]]
@@ -249,14 +262,38 @@ for r in load_rows(DATA_FILE, sheet_idx=2):
 print(f'  Debt rows: {len(debt_records)}, total debt: {sum(r["debt"] for r in debt_records):.2f}')
 
 # ============================================================
+# 3.5 构建订单金额映射表（用于回款周期计算）
+# ============================================================
+print('Building order amount map...')
+order_amount_map = defaultdict(float)  # 业绩单号 -> 业绩总金额(万)
+debt_amount_map = defaultdict(float)   # 业绩单号 -> 欠款金额(万)
+
+# 从业绩表读取 业绩总金额（Sheet0=25Q2, Sheet1=26Q2，全量读取不加过滤）
+for _si in [0, 1]:
+    for r in load_rows(DATA_FILE, sheet_idx=_si):
+        on = str(r.get('业绩单号') or '').strip().replace('\t', '')
+        if not on:
+            continue
+        order_amount_map[on] += to_wan(r.get('业绩总金额'))
+
+# 从欠款表读取 欠款金额（Sheet2，全量读取不加过滤）
+for r in load_rows(DATA_FILE, sheet_idx=2):
+    on = str(r.get('业绩单号') or '').strip().replace('\t', '')
+    if not on:
+        continue
+    debt_amount_map[on] += to_wan(r.get('欠款金额'))
+
+print(f'  Orders from perf sheets: {len(order_amount_map)}')
+print(f'  Orders from debt sheet: {len(debt_amount_map)}')
+
+# ============================================================
 # 4. 读取认款数据，计算回款周期和回款金额
 # ============================================================
+# 回款周期公式：回款周期 = Σ(每笔订单金额 × 账龄) ÷ 回款总金额
+# 订单金额: 每笔订单的业绩总金额（优先从业绩表获取，fallback=欠款金额+已认款金额）
+# 账龄 = 回款日期 - 业绩日期
+# 回款总金额 = 认款协同金额之和
 print('Loading payment data...')
-# 建立业绩单号 -> 部门 映射
-order_to_dept = {}
-for rec in perf_records:
-    if rec['order_no']:
-        order_to_dept.setdefault(rec['order_no'], rec['dept'])
 
 # 回款周期记录
 cycle_records = []
@@ -265,35 +302,68 @@ seller_collect = defaultdict(float)
 for r in load_rows(DATA_FILE, sheet_idx=3):
     if str(r.get('目标认款类型') or '').strip() != '业绩单认款':
         continue
-    order_no = str(r.get('业绩单号') or '').strip().replace('\t', '')
-    dept = order_to_dept.get(order_no)
-    if not dept:
-        # Try to find dept by seller
-        seller = str(r.get('销售员名称') or '').strip().replace('\t', '')
-        dept = None
-        for rec in perf_records:
-            if rec['seller_name'] == seller:
-                dept = rec['dept']
-                break
-    if not dept:
+    # 使用认款数据自有的部门信息，不依赖业绩数据映射
+    dept1 = str(r.get('一级部门') or '').strip().replace('\t', '')
+    if dept1 not in DEPT_MAP:
         continue
-    is_b = str(r.get('是否核算B端业绩') or '').strip().replace('\t', '')
-    if is_b == '否':
+    raw_dept2 = str(r.get('二级部门') or '').strip().replace('\t', '')
+    raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
+    seller = str(r.get('销售员名称') or '').strip().replace('\t', '')
+    dept2 = normalize_dept2(raw_dept2, raw_sub_dept, seller)
+    if dept2 is None:
         continue
+    sub_dept = normalize_sub_dept(dept2, raw_sub_dept, raw_dept2, seller)
+
     perf_date = parse_date(r.get('业绩日期'))
     pay_date = parse_date(r.get('回款日期'))
     if not perf_date or not pay_date:
         continue
     days = (pay_date - perf_date).days
-    if days < 0 or days > 365 * 2:
+    # 账龄 = 回款日期 - 业绩日期，负数无意义，跳过
+    if days < 0:
         continue
     amount = to_wan(r.get('认款协同金额'))
-    seller = str(r.get('销售员名称') or '').strip().replace('\t', '')
-    cycle_records.append({'dept': dept, 'seller': seller, 'days': days, 'amount': amount})
+    if amount <= 0:
+        continue
+    order_no = str(r.get('业绩单号') or '').strip().replace('\t', '')
+    cycle_records.append({
+        'dept': dept2,
+        'sub_dept': sub_dept,
+        'seller': seller,
+        'days': days,
+        'amount': amount,  # 认款协同金额（回款金额）
+        'order_no': order_no,
+        'order_amount': amount,  # 默认用认款金额，后面会更新为订单金额
+        'perf_date': perf_date,
+        'pay_date': pay_date,
+    })
     seller_collect[seller] += amount
 
-avg_cycle = weighted_avg(cycle_records)
-print(f'  Payment records for cycle: {len(cycle_records)}, avg cycle: {avg_cycle:.1f}')
+# 计算每笔订单的金额（用于回款周期加权）
+# 优先级：1. 业绩表的业绩总金额 > 2. 欠款金额+已认款金额 > 3. 认款协同金额本身
+paid_amount_map = defaultdict(float)  # 业绩单号 -> 已认款金额合计(万)
+for rec in cycle_records:
+    if rec['order_no']:
+        paid_amount_map[rec['order_no']] += rec['amount']
+
+matched_count = 0
+fallback_count = 0
+for rec in cycle_records:
+    on = rec['order_no']
+    if on and on in order_amount_map and order_amount_map[on] > 0:
+        rec['order_amount'] = order_amount_map[on]
+        matched_count += 1
+    elif on and (debt_amount_map.get(on, 0) + paid_amount_map.get(on, 0)) > 0:
+        rec['order_amount'] = debt_amount_map[on] + paid_amount_map[on]
+        matched_count += 1
+    else:
+        rec['order_amount'] = rec['amount']  # fallback: 用认款金额
+        fallback_count += 1
+
+avg_cycle = cycle_weighted_avg(cycle_records)
+total_collect_amount = sum(r['amount'] for r in cycle_records)
+print(f'  Payment records for cycle: {len(cycle_records)}, total amount: {total_collect_amount:.2f} wan, avg cycle: {avg_cycle:.1f}')
+print(f'  Order amount matched: {matched_count} ({matched_count/len(cycle_records)*100:.1f}%), fallback: {fallback_count}')
 
 # 回填 performance records 的 collect 字段
 for rec in perf_records:
@@ -392,7 +462,7 @@ for seller, s in seller_data.items():
         'd180': round(s['d180'], 2),
     })
     c_items = [c for c in cycle_records if c['seller'] == seller]
-    cycle = weighted_avg(c_items)
+    cycle = cycle_weighted_avg(c_items)
     sales_cycle_detail[dept].append({
         'name': seller,
         'sub_dept': seller_sub_dept.get(seller, '其他'),
@@ -422,19 +492,45 @@ target_total = sum(target_map.values()) if target_map else ESTIMATED_TOTAL
 # 完成率按实际业绩（未缩放）计算
 total_completion = round(actual_total / target_total * 100, 1) if target_total > 0 else 0.0
 
-# 在职销售员 - 从全部数据源统计（26Q2业绩 + 欠款），不要求当季业绩>0
-# Q2刚开始大部分销售员还没有业绩，不能只统计有业绩的
-all_active_sellers = set()
-# 26Q2业绩数据中的在职销售员
-for r in perf_records:
-    if r['seller_status'] == '在职' and r['seller_name']:
-        all_active_sellers.add(r['seller_name'])
-# 欠款数据中的在职销售员（全量数据，覆盖面最广）
-for r in debt_records:
-    if r['seller_status'] == '在职' and r['seller_name']:
-        all_active_sellers.add(r['seller_name'])
-active_sellers = (all_active_sellers - BLACKLIST) | KEEP_LIST
-active_seller_count = len(active_sellers)
+# 在职销售员人数 - 优先使用 Excel 的"在职销售人数" sheet
+# 该 sheet 是人力部门提供的官方数据（按三级部门统计 + 大区合计）
+# 各部门人数为 26 财年 7 月在职人员状况
+active_seller_count = 0
+active_seller_count_by_dept = {}
+try:
+    _hr_wb = openpyxl.load_workbook(DATA_FILE, data_only=True, read_only=True)
+    hr_sheet = _hr_wb['在职销售人数']
+    for row in hr_sheet.iter_rows(min_row=2, values_only=True):
+        if not row or not row[0]:
+            continue
+        dept_name = str(row[0]).strip() if row[0] else ''
+        if not dept_name or '合计' in dept_name:
+            # 大区合计行：作为总人数
+            try:
+                v = int(row[1]) if row[1] is not None else 0
+                active_seller_count = v
+            except (TypeError, ValueError):
+                pass
+            continue
+        # 各部门人数
+        try:
+            v = int(row[1]) if row[1] is not None else 0
+            active_seller_count_by_dept[dept_name] = v
+        except (TypeError, ValueError):
+            pass
+    _hr_wb.close()
+    print(f'  HR sheet total: {active_seller_count} | by dept: {active_seller_count_by_dept}')
+except Exception as e:
+    print(f'  WARN: failed to load HR sheet ({e}), falling back to data-derived count')
+    all_active_sellers = set()
+    for r in perf_records:
+        if r['seller_status'] == '在职' and r['seller_name']:
+            all_active_sellers.add(r['seller_name'])
+    for r in debt_records:
+        if r['seller_status'] == '在职' and r['seller_name']:
+            all_active_sellers.add(r['seller_name'])
+    active_sellers = (all_active_sellers - BLACKLIST) | KEEP_LIST
+    active_seller_count = len(active_sellers)
 
 # 25Q2 总业绩
 total_perf_25 = sum(r['perf'] for r in perf_records_25)
@@ -494,16 +590,11 @@ for r in debt_records:
     else:
         sd['d180'] += r['debt']
 
-# 按三级部门聚合回款周期
+# 按三级部门聚合回款周期（直接使用认款数据中的部门信息）
 subdept_cycle_items = defaultdict(list)
-seller_dept_subdept = {}
-for seller, sub_dept in seller_sub_dept.items():
-    dept = seller_data[seller]['dept']
-    seller_dept_subdept[seller] = (dept, sub_dept)
 for rec in cycle_records:
-    key = seller_dept_subdept.get(rec['seller'])
-    if key:
-        subdept_cycle_items[key].append(rec)
+    key = (rec['dept'], rec['sub_dept'])
+    subdept_cycle_items[key].append(rec)
 
 # 合并三级部门数据
 all_subdepts = set(subdept_perf.keys()) | set(subdept_debt.keys()) | set(subdept_perf_25.keys())
@@ -518,7 +609,7 @@ for key in sorted(all_subdepts):
     yoy = round((actual_perf - v25_sub) / v25_sub * 100, 1) if v25_sub > 0 else None
     target = target_map.get(sub_dept, 0.0)
     completion = round(actual_perf / target * 100, 1) if target > 0 else 0.0
-    cycle = weighted_avg(subdept_cycle_items.get(key, []))
+    cycle = cycle_weighted_avg(subdept_cycle_items.get(key, []))
     subdept_data.append({
         'dept': dept,
         'sub_dept': sub_dept,
@@ -529,7 +620,7 @@ for key in sorted(all_subdepts):
         'yoy': yoy if yoy is not None else 0,
         'target': round(target, 2),
         'completion': completion,
-        'sales': len(p['sales']),
+        'sales': active_seller_count_by_dept.get(sub_dept, len(p['sales'])),  # 优先用HR sheet数据
         'd30': round(d['d30'], 2),
         'd30_90': round(d['d30_90'], 2),
         'd90_180': round(d['d90_180'], 2),
@@ -674,7 +765,7 @@ total = {
     'd30_90': d30_90,
     'd90_180': d90_180,
     'd180': d180,
-    'collect': sum(d['collect'] for d in subdept_data),
+    'collect': total_collect_amount,
     'avg_cycle': avg_cycle,
 }
 
@@ -1144,7 +1235,7 @@ html = f'''<!DOCTYPE html>
                     <div class="kpi-icon">&#128202;</div>
                     <h3>全大区平均回款周期</h3>
                     <div class="value warning">{total['avg_cycle']:.1f}</div>
-                    <div class="sub">天（欠款+回款加权综合）</div>
+                    <div class="sub">天（订单金额加权平均）</div>
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-icon">&#128308;</div>
@@ -1169,7 +1260,7 @@ html = f'''<!DOCTYPE html>
             <div style="background:rgba(255, 255, 255, 0.03);border-radius:12px;padding:15px 20px;margin-bottom:20px;border:1px solid rgba(255, 255, 255, 0.08);">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
                     <span style="font-weight:600;color:#00d4ff;">三级部门平均回款周期（天）</span>
-                    <span style="color:#8892b0;font-size:0.9em;">| 回款周期计算 =（欠款加权天数 + 回款加权天数）&divide;（欠款总额 + 认款协同金额）</span>
+                    <span style="color:#8892b0;font-size:0.9em;">| 回款周期计算 = &Sigma;(每笔订单金额 &times; 账龄) &divide; 回款总金额 &nbsp; 账龄 = 回款日期 - 业绩日期</span>
                 </div>
                 <div style="display:flex;gap:20px;flex-wrap:wrap;">
                     <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#00ff88;display:inline-block;"></span><span style="color:#ccd6f6;font-size:0.9em;">&le;60天（良好）</span></div>
