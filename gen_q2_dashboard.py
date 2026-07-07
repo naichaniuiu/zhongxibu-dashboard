@@ -68,8 +68,8 @@ def weighted_avg(items):
     return sum(x['days'] * x['amount'] for x in items) / total_w
 
 def cycle_weighted_avg(items):
-    """回款周期 = Σ(订单金额 × 账龄) ÷ 回款总金额
-    订单金额: 每笔订单的业绩总金额（从业绩数据查找，fallback=欠款金额+已认款金额）
+    """回款周期 = Σ(每笔认款金额 × 账龄) ÷ 回款总金额
+    认款金额: 每笔认款记录的认款协同金额
     账龄: 回款日期 - 业绩日期
     分母: 回款总金额（认款协同金额之和）
     """
@@ -78,7 +78,7 @@ def cycle_weighted_avg(items):
     total_payment = sum(x['amount'] for x in items)
     if total_payment <= 0:
         return 0.0
-    return sum(x['order_amount'] * x['days'] for x in items) / total_payment
+    return sum(x['amount'] * x['days'] for x in items) / total_payment
 
 def load_rows(path, sheet_idx=0):
     wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
@@ -1235,7 +1235,7 @@ html = f'''<!DOCTYPE html>
                     <div class="kpi-icon">&#128202;</div>
                     <h3>全大区平均回款周期</h3>
                     <div class="value warning">{total['avg_cycle']:.1f}</div>
-                    <div class="sub">天（订单金额加权平均）</div>
+                    <div class="sub">天（认款金额加权平均）</div>
                 </div>
                 <div class="kpi-card">
                     <div class="kpi-icon">&#128308;</div>
@@ -1260,7 +1260,7 @@ html = f'''<!DOCTYPE html>
             <div style="background:rgba(255, 255, 255, 0.03);border-radius:12px;padding:15px 20px;margin-bottom:20px;border:1px solid rgba(255, 255, 255, 0.08);">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
                     <span style="font-weight:600;color:#00d4ff;">三级部门平均回款周期（天）</span>
-                    <span style="color:#8892b0;font-size:0.9em;">| 回款周期计算 = &Sigma;(每笔订单金额 &times; 账龄) &divide; 回款总金额 &nbsp; 账龄 = 回款日期 - 业绩日期</span>
+                    <span style="color:#8892b0;font-size:0.9em;">| 回款周期计算 = &Sigma;(每笔认款金额 &times; 账龄) &divide; 回款总金额 &nbsp; 账龄 = 回款日期 - 业绩日期</span>
                 </div>
                 <div style="display:flex;gap:20px;flex-wrap:wrap;">
                     <div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#00ff88;display:inline-block;"></span><span style="color:#ccd6f6;font-size:0.9em;">&le;60天（良好）</span></div>
