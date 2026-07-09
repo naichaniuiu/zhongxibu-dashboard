@@ -609,6 +609,8 @@ for key in sorted(all_subdepts):
     target = target_map.get(sub_dept, 0.0)
     completion = round(actual_perf / target * 100, 1) if target > 0 else 0.0
     cycle = cycle_weighted_avg(subdept_cycle_items.get(key, []))
+    # 销售员数：HR 数据为底，业绩表去重数为上限（覆盖 HR 名单不全的情况）
+    sales_count = max(active_seller_count_by_dept.get(sub_dept, 0), len(p['sales']))
     subdept_data.append({
         'dept': dept,
         'sub_dept': sub_dept,
@@ -619,7 +621,7 @@ for key in sorted(all_subdepts):
         'yoy': yoy if yoy is not None else 0,
         'target': round(target, 2),
         'completion': completion,
-        'sales': active_seller_count_by_dept.get(sub_dept, len(p['sales'])),  # 优先用HR sheet数据
+        'sales': sales_count,
         'd30': round(d['d30'], 2),
         'd30_90': round(d['d30_90'], 2),
         'd90_180': round(d['d90_180'], 2),
@@ -628,6 +630,41 @@ for key in sorted(all_subdepts):
         'collect': round(p['collect'], 2),
         'cycle': round(cycle, 1),
     })
+subdept_data.sort(key=lambda x: -x['v26'])
+
+# 合并 sub_dept 相同的行（如"其他"同时出现在 湖北营销区|其他 和 综合管理办公室|其他）
+# 规则：subdept_data 已按 v26 降序排，第一个是该 sub_dept 业绩最大的行，dept 沿用
+# 同 sub_dept 的 target/sales 相同，不会重复；业绩、欠款、25Q2 等需要累加
+_merged = {}  # sub_dept -> row
+for row in subdept_data:
+    sd = row['sub_dept']
+    if sd not in _merged:
+        _merged[sd] = dict(row)
+        continue
+    cur = _merged[sd]
+    # 累加业绩、25Q2、欠款
+    cur['v26'] = round(cur['v26'] + row['v26'], 2)
+    cur['v26_actual'] = round(cur['v26_actual'] + row['v26_actual'], 2)
+    cur['v25'] = round(cur['v25'] + row['v25'], 2)
+    # yoy 重新计算
+    if cur['v25'] > 0:
+        cur['yoy'] = round((cur['v26_actual'] - cur['v25']) / cur['v25'] * 100, 1)
+    # completion 重新计算
+    if cur['target'] > 0:
+        cur['completion'] = round(cur['v26_actual'] / cur['target'] * 100, 1)
+    # sales 取最大值（同一 sub_dept 的 HR 销售员数应只计一次）
+    cur['sales'] = max(cur['sales'], row['sales'])
+    # 欠款相关相加
+    cur['d30'] = round(cur['d30'] + row['d30'], 2)
+    cur['d30_90'] = round(cur['d30_90'] + row['d30_90'], 2)
+    cur['d90_180'] = round(cur['d90_180'] + row['d90_180'], 2)
+    cur['d180'] = round(cur['d180'] + row['d180'], 2)
+    cur['total_debt'] = round(cur['total_debt'] + row['total_debt'], 2)
+    cur['collect'] = round(cur['collect'] + row['collect'], 2)
+subdept_data = list(_merged.values())
+# 重新设置 key（按当前 dept）
+for row in subdept_data:
+    row['key'] = f'{row["dept"]}|{row["sub_dept"]}'
 subdept_data.sort(key=lambda x: -x['v26'])
 
 # ============================================================
