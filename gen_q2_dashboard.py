@@ -14,7 +14,7 @@ from collections import defaultdict, Counter
 # ============================================================
 # 配置
 # ============================================================
-TODAY = datetime(2026, 7, 7)        # 数据基准日
+TODAY = datetime(2026, 7, 9)        # 数据基准日
 DATA_FILE = 'D:/业绩 欠款看板 Q2.xlsx'
 ESTIMATED_TOTAL = 6790.0             # 用户指定的Q2预估业绩（万元）
 
@@ -166,7 +166,9 @@ for r in load_rows(DATA_FILE, sheet_idx=1):
     d = parse_date(r.get('业绩日期'))
     if not d or not (Q2_START <= d <= Q2_END):
         continue
-    # Q2 sheet has no "是否核算B端业绩" column - skip filter
+    # 新版 Sheet1 已包含"是否核算B端业绩"列，按口径过滤
+    if str(r.get('是否核算B端业绩') or '').strip() != '是':
+        continue
     raw_dept2 = str(r.get('二级部门') or '').strip().replace('\t', '')
     raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
     seller_name = str(r.get('销售员名称') or '').strip().replace('\t', '')
@@ -185,9 +187,8 @@ for r in load_rows(DATA_FILE, sheet_idx=1):
         'sub_dept': sub_dept,
         'seller_status': str(r.get('销售员状态') or '').strip().replace('\t', ''),
         'perf': to_wan(r.get('业绩总金额')),
-        # Q2 sheet has no 回款金额/欠款金额 columns
-        'collect': 0.0,
-        'debt': 0.0,
+        'collect': to_wan(r.get('回款金额')),
+        'debt': to_wan(r.get('欠款金额')),
     })
 print(f'  26Q2 performance records: {len(perf_records)}')
 actual_total = sum(r['perf'] for r in perf_records)
@@ -365,9 +366,7 @@ total_collect_amount = sum(r['amount'] for r in cycle_records)
 print(f'  Payment records for cycle: {len(cycle_records)}, total amount: {total_collect_amount:.2f} wan, avg cycle: {avg_cycle:.1f}')
 print(f'  Order amount matched: {matched_count} ({matched_count/len(cycle_records)*100:.1f}%), fallback: {fallback_count}')
 
-# 回填 performance records 的 collect 字段
-for rec in perf_records:
-    rec['collect'] = seller_collect.get(rec['seller_name'], 0.0)
+# collect 已从 Sheet1 回款金额直接读取，无需回填
 
 # ============================================================
 # 5. 缩放26Q2业绩到用户指定总额 6790万
