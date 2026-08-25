@@ -138,7 +138,7 @@ def normalize_sub_dept(dept2, sub_dept, raw_dept2='', seller_name=''):
     sub_dept = str(sub_dept or '其他').strip().replace('\t', '')
     raw_dept2 = str(raw_dept2 or '').strip().replace('\t', '')
     seller = str(seller_name or '').strip().replace('\t', '')
-    if seller in ('吴晗', '李国栋'):
+    if seller == '李国栋':
         return '其他'
     if raw_dept2 in ('中西销售助理部', '华中用户拓展部', '解决方案部'):
         return '其他'
