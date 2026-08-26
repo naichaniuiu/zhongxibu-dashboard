@@ -1,7 +1,8 @@
 # Automation Execution Memory
 
-## 2026-08-25 (Tue) 09:50
-- Q1 dashboard (20260513090923): Steps 1-4 all ran successfully. generate_dashboard.py extracted data, generate_html.py generated HTML, cycle drill and debt/perf drill injected. Git push to sales-dashboard repo FAILED due to GitHub Push Protection (detected PAT in push_q2_dashboard.py/push_via_api.py history). Working tree clean, no new data changes.
-- Q2 dashboard (zhongxibu-dashboard): gen_q2_dashboard.py ran successfully with TODAY=2026-08-25. Remote was already at 2da3fb2 with today's data. After reset --hard to remote SHA and regenerate, working tree was clean (data identical). No new commit needed. GitHub Pages already up to date.
-- KPI: 26Q2 actual=1110.09wan, 25Q2(B-end filtered)=4463.94wan, total debt=2035.20wan, overdue(>30d)=1539.03wan, active sellers=59, avg cycle=63.2d
-- Note: Remote SHA changed between ls-remote (dc31734) and fetch (2da3fb2). Always use actual fetch result for reset target.
+## 2026-08-26 (Wed) 09:54
+- Q1 dashboard (20260513090923): All scripts ran successfully. generate_dashboard.py, generate_html.py, gen_cycle_drill.py/update_cycle_drill.py, gen_drill_data.py/update_drill.py. Local had c752823 (commits consolidated after push), local went 10 ahead/33 behind origin/master initially. Push with credential.helper= succeeded; remote advanced to 105d126. Branch is master (not main), Q1 commit message had "每日数据更新".
+- Q2 dashboard (zhongxibu-dashboard): TODAY already updated to 2026-08-26 by user. gen_q2_dashboard.py succeeded. Excel file D:/业绩 欠款看板 Q2.xlsx was modified today 09:51:30. Remote was at 879f1b7, local 1 ahead after auto-commit. git add -A + push with credential.helper= succeeded; remote advanced to 75a1d5d.
+- KPI (today vs yesterday): 26Q2 actual=1121.41wan (vs 1110.09wan), 25Q2(B-end)=4463.94wan (same), total debt=1995.37wan (vs 2035.20wan), overdue(>30d)=1498.18wan (vs 1539.03wan), active sellers=59 (same), avg cycle=63.3d (vs 63.2d). Performance up, debt down - reasonable.
+- All steps completed. Q2 HTML presented to user for review.
+- Note: Both repos showed diverged history initially (Q1 10ahead/33behind, Q2 1ahead after auto-commit), but push with credential.helper= resolved cleanly. No reset --hard needed today.
