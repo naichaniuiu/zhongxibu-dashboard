@@ -12,3 +12,12 @@
 - Q2 dashboard (zhongxibu-dashboard): TODAY already 2026-08-26. gen_q2_dashboard.py succeeded. Remote at 75a1d5d, local in sync. Committed db8b076 (2 files changed: index.html + memory), push succeeded; remote advanced to db8b076.
 - KPI identical to 09:54 run: 26Q2 actual=1121.41wan, 25Q2(B-end)=4463.94wan, total debt=1995.37wan, overdue(>30d)=1498.18wan, active sellers=59, avg cycle=63.3d. No Excel changes since 09:51.
 - Q2 HTML presented to user.
+
+## 2026-08-26 (Wed) 10:12 - 口径调整（用户确认）
+- User reported discrepancy: Excel total debt=2016 vs dashboard 1995.37; Q2 perf=1122.72 vs dashboard 1121.41.
+- Root cause: script excluded 离职(resigned) seller rows from perf (17 rows, 1.31wan) and debt (215 rows, 21.60wan).
+- User confirmed: **include resigned sellers in BOTH perf and debt** (石红银 exclusion kept; 0 rows in current file).
+- Removed 离职 filter from 4 locations in gen_q2_dashboard.py (L178/L226/L251/L325), kept SELLER_EXCLUDE.
+- After fix: 26Q2 actual=1122.72wan ✓, total debt=2016.97wan ✓; 25Q2 now 4780.23wan (incl resigned); overdue(>30d)=1518.76wan; avg cycle 63.3d unchanged (no resigned rows in payment data).
+- Pushed: db8b076 → 45a0111. Q2 HTML presented to user.
+- ⚠️ CALIBER CHANGE NOTE: 口径已更新，后续运行直接包含离职行，不再剔除。
