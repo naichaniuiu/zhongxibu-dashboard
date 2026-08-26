@@ -175,7 +175,7 @@ for r in load_rows(DATA_FILE, sheet_idx=1):
     raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
     seller_name = str(r.get('销售员名称') or '').strip().replace('\t', '')
     _seller_status = str(r.get('销售员状态') or '').strip().replace('\t', '')
-    if _seller_status == '离职' or seller_name in SELLER_EXCLUDE:
+    if seller_name in SELLER_EXCLUDE:
         continue
     dept2 = normalize_dept2(raw_dept2, raw_sub_dept, seller_name)
     if dept2 is None:
@@ -223,7 +223,7 @@ for r in load_rows(DATA_FILE, sheet_idx=0):
     raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
     seller_name = str(r.get('销售员名称') or '').strip().replace('\t', '')
     _seller_status = str(r.get('销售员状态') or '').strip().replace('\t', '')
-    if _seller_status == '离职' or seller_name in SELLER_EXCLUDE:
+    if seller_name in SELLER_EXCLUDE:
         continue
     dept2 = normalize_dept2(raw_dept2, raw_sub_dept, seller_name)
     if dept2 is None:
@@ -248,7 +248,7 @@ for r in load_rows(DATA_FILE, sheet_idx=2):
     raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
     seller_name = str(r.get('销售员名称') or '').strip().replace('\t', '')
     _seller_status = str(r.get('销售员状态') or '').strip().replace('\t', '')
-    if _seller_status == '离职' or seller_name in SELLER_EXCLUDE:
+    if seller_name in SELLER_EXCLUDE:
         continue
     dept2 = normalize_dept2(raw_dept2, raw_sub_dept, seller_name)
     if dept2 is None:
@@ -322,7 +322,7 @@ for r in load_rows(DATA_FILE, sheet_idx=3):
     raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
     seller = str(r.get('销售员名称') or '').strip().replace('\t', '')
     _seller_status = str(r.get('销售员状态') or '').strip().replace('\t', '')
-    if _seller_status == '离职' or seller in SELLER_EXCLUDE:
+    if seller in SELLER_EXCLUDE:
         continue
     dept2 = normalize_dept2(raw_dept2, raw_sub_dept, seller)
     if dept2 is None:

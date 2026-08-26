@@ -6,3 +6,9 @@
 - KPI (today vs yesterday): 26Q2 actual=1121.41wan (vs 1110.09wan), 25Q2(B-end)=4463.94wan (same), total debt=1995.37wan (vs 2035.20wan), overdue(>30d)=1498.18wan (vs 1539.03wan), active sellers=59 (same), avg cycle=63.3d (vs 63.2d). Performance up, debt down - reasonable.
 - All steps completed. Q2 HTML presented to user for review.
 - Note: Both repos showed diverged history initially (Q1 10ahead/33behind, Q2 1ahead after auto-commit), but push with credential.helper= resolved cleanly. No reset --hard needed today.
+
+## 2026-08-26 (Wed) 10:01
+- Q1 dashboard (20260513090923): All 6 scripts ran successfully (same data as 09:54 run, Excel unchanged since 09:51). Committed 1a1ac08 but push returned "Everything up-to-date" and HEAD was auto-reset to origin/master (105d126). Remote already at 105d126 from 09:54 run — Q1 is up-to-date.
+- Q2 dashboard (zhongxibu-dashboard): TODAY already 2026-08-26. gen_q2_dashboard.py succeeded. Remote at 75a1d5d, local in sync. Committed db8b076 (2 files changed: index.html + memory), push succeeded; remote advanced to db8b076.
+- KPI identical to 09:54 run: 26Q2 actual=1121.41wan, 25Q2(B-end)=4463.94wan, total debt=1995.37wan, overdue(>30d)=1498.18wan, active sellers=59, avg cycle=63.3d. No Excel changes since 09:51.
+- Q2 HTML presented to user.
