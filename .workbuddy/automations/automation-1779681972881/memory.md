@@ -21,3 +21,11 @@
 - After fix: 26Q2 actual=1122.72wan ✓, total debt=2016.97wan ✓; 25Q2 now 4780.23wan (incl resigned); overdue(>30d)=1518.76wan; avg cycle 63.3d unchanged (no resigned rows in payment data).
 - Pushed: db8b076 → 45a0111. Q2 HTML presented to user.
 - ⚠️ CALIBER CHANGE NOTE: 口径已更新，后续运行直接包含离职行，不再剔除。
+
+## 2026-08-27 (Thu) 10:04
+- User asked "怎么没有更新看板？" — automation had triggered at 10:00 but dashboard still showed yesterday's data at that moment.
+- Manually executed full pipeline: TODAY updated from 2026-08-26 to 2026-08-27 in gen_q2_dashboard.py.
+- Q1 (20260513090923): All 6 scripts ran successfully. Push said "Everything up-to-date" — remote already at b856e33 (ahead by 1 commit already pushed).
+- Q2 (zhongxibu-dashboard): gen_q2_dashboard.py succeeded. Excel modified at 09:49 today. Committed e7a7833. Push initially failed because CRED variable was empty (&& chain broke when git commit returned "nothing to commit" exit 1, but ; let push run with empty CRED). Fixed by running push separately with `CRED=$(head -1 ~/.git-credentials | tr -d '\r\n')`. Remote was already at e7a7833 — push succeeded.
+- KPI: 26Q2 actual=1144.75wan (vs 1122.72 yesterday), 25Q2=4780.23wan (same), total debt=1964.37wan (vs 2016.97 yesterday), overdue(>30d)=1456.14wan (vs 1518.76), active sellers=59 (same), avg cycle=63.5d (vs 63.3d).
+- ⚠️ FIX: Must use `tr -d '\r\n'` when reading git-credentials on Windows to avoid CRLF breaking the push URL.
