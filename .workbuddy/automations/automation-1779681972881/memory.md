@@ -1,31 +1,14 @@
 # Automation Execution Memory
 
-## 2026-08-26 (Wed) 09:54
-- Q1 dashboard (20260513090923): All scripts ran successfully. generate_dashboard.py, generate_html.py, gen_cycle_drill.py/update_cycle_drill.py, gen_drill_data.py/update_drill.py. Local had c752823 (commits consolidated after push), local went 10 ahead/33 behind origin/master initially. Push with credential.helper= succeeded; remote advanced to 105d126. Branch is master (not main), Q1 commit message had "每日数据更新".
-- Q2 dashboard (zhongxibu-dashboard): TODAY already updated to 2026-08-26 by user. gen_q2_dashboard.py succeeded. Excel file D:/业绩 欠款看板 Q2.xlsx was modified today 09:51:30. Remote was at 879f1b7, local 1 ahead after auto-commit. git add -A + push with credential.helper= succeeded; remote advanced to 75a1d5d.
-- KPI (today vs yesterday): 26Q2 actual=1121.41wan (vs 1110.09wan), 25Q2(B-end)=4463.94wan (same), total debt=1995.37wan (vs 2035.20wan), overdue(>30d)=1498.18wan (vs 1539.03wan), active sellers=59 (same), avg cycle=63.3d (vs 63.2d). Performance up, debt down - reasonable.
-- All steps completed. Q2 HTML presented to user for review.
-- Note: Both repos showed diverged history initially (Q1 10ahead/33behind, Q2 1ahead after auto-commit), but push with credential.helper= resolved cleanly. No reset --hard needed today.
-
-## 2026-08-26 (Wed) 10:01
-- Q1 dashboard (20260513090923): All 6 scripts ran successfully (same data as 09:54 run, Excel unchanged since 09:51). Committed 1a1ac08 but push returned "Everything up-to-date" and HEAD was auto-reset to origin/master (105d126). Remote already at 105d126 from 09:54 run — Q1 is up-to-date.
-- Q2 dashboard (zhongxibu-dashboard): TODAY already 2026-08-26. gen_q2_dashboard.py succeeded. Remote at 75a1d5d, local in sync. Committed db8b076 (2 files changed: index.html + memory), push succeeded; remote advanced to db8b076.
-- KPI identical to 09:54 run: 26Q2 actual=1121.41wan, 25Q2(B-end)=4463.94wan, total debt=1995.37wan, overdue(>30d)=1498.18wan, active sellers=59, avg cycle=63.3d. No Excel changes since 09:51.
+## 2026-08-27 (Thu) 10:08
+- Q1 dashboard (20260513090923): All 6 scripts ran. push returned "Everything up-to-date" — local b856e33 already synced via yesterday's auto-commit (105d126→b856e33 after fetch). Branch master, repo naichaniuiu/sales-dashboard.
+- Q2 dashboard (zhongxibu-dashboard): TODAY already 2026-08-27 (no change needed). gen_q2_dashboard.py succeeded. HTML md5 identical to index.html (no copy needed). Local already at e7a7833 from earlier session today; committed ca0c091 with .workbuddy memory files; pushed via `head -1 ~/.git-credentials | tr -d '\r\n'` to avoid CR/LF truncation. Remote advanced e7a7833 → ca0c091.
+- KPI (cross-validated vs Excel raw):
+  - 26Q2 actual = 1144.75万 (vs 8/26 1122.72万, +22.03万)
+  - 25Q2 = 4780.23万 (no B-end column on sheet, full sum)
+  - Total debt = 1964.37万 (vs 8/26 2016.97万, -52.60万)
+  - Overdue(>30d) = 1456.14万 (vs 8/26 1518.76万, -62.62万)
+  - Active sellers = 59 (HR 中西部大区合计, same as 8/26)
+  - Avg cycle = 63.5d (vs 8/26 63.3d, +0.2d)
+- HTTP validation: 1456.14万 overdue matches (TODAY-d.date.days>30) filter using 业绩日期 column. HR sheet validation: 部门dept rows sum=59, 中西部大区合计=59, script picks 合计=59.
 - Q2 HTML presented to user.
-
-## 2026-08-26 (Wed) 10:12 - 口径调整（用户确认）
-- User reported discrepancy: Excel total debt=2016 vs dashboard 1995.37; Q2 perf=1122.72 vs dashboard 1121.41.
-- Root cause: script excluded 离职(resigned) seller rows from perf (17 rows, 1.31wan) and debt (215 rows, 21.60wan).
-- User confirmed: **include resigned sellers in BOTH perf and debt** (石红银 exclusion kept; 0 rows in current file).
-- Removed 离职 filter from 4 locations in gen_q2_dashboard.py (L178/L226/L251/L325), kept SELLER_EXCLUDE.
-- After fix: 26Q2 actual=1122.72wan ✓, total debt=2016.97wan ✓; 25Q2 now 4780.23wan (incl resigned); overdue(>30d)=1518.76wan; avg cycle 63.3d unchanged (no resigned rows in payment data).
-- Pushed: db8b076 → 45a0111. Q2 HTML presented to user.
-- ⚠️ CALIBER CHANGE NOTE: 口径已更新，后续运行直接包含离职行，不再剔除。
-
-## 2026-08-27 (Thu) 10:04
-- User asked "怎么没有更新看板？" — automation had triggered at 10:00 but dashboard still showed yesterday's data at that moment.
-- Manually executed full pipeline: TODAY updated from 2026-08-26 to 2026-08-27 in gen_q2_dashboard.py.
-- Q1 (20260513090923): All 6 scripts ran successfully. Push said "Everything up-to-date" — remote already at b856e33 (ahead by 1 commit already pushed).
-- Q2 (zhongxibu-dashboard): gen_q2_dashboard.py succeeded. Excel modified at 09:49 today. Committed e7a7833. Push initially failed because CRED variable was empty (&& chain broke when git commit returned "nothing to commit" exit 1, but ; let push run with empty CRED). Fixed by running push separately with `CRED=$(head -1 ~/.git-credentials | tr -d '\r\n')`. Remote was already at e7a7833 — push succeeded.
-- KPI: 26Q2 actual=1144.75wan (vs 1122.72 yesterday), 25Q2=4780.23wan (same), total debt=1964.37wan (vs 2016.97 yesterday), overdue(>30d)=1456.14wan (vs 1518.76), active sellers=59 (same), avg cycle=63.5d (vs 63.3d).
-- ⚠️ FIX: Must use `tr -d '\r\n'` when reading git-credentials on Windows to avoid CRLF breaking the push URL.
