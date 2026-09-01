@@ -1,6 +1,18 @@
 # Automation Execution Memory
 
-## 2026-08-28 (Fri) 10:05
+## 2026-09-01 (Tue) 10:01
+- All 8 steps ran successfully (Q1 6 scripts + Q2 1 script).
+- Q1 (20260513090923, branch=master): HTML updated with new drill data, committed `cf82df4`. Pushed `9dcc18b..cf82df4`. Q1 26Q1 total = 4305.6万, 25Q1 = 3835.63万.
+- Q2 (zhongxibu-dashboard, branch=main): TODAY advanced `2026-08-31 → 2026-09-01`. Local HEAD was at `d207ddc` (8/28), remote at `f599e45` (8/31). Fetched + reset --hard to `f599e45`, regen with new TODAY, committed `d07a3c7`, pushed `f599e45..d07a3c7`.
+- KPI (Q2, vs 8/28):
+  - 26Q2 actual = 1182.45万 (estimated/scaled display = 6790.00万)
+  - 25Q2 = 4780.23万 (no B-end column, full sum)
+  - Total debt = 1908.58万 (vs 8/28 1964.37万, -55.79万, debt cleared/aged into Q3)
+  - Overdue(>30d) = 1621.29万 (vs 8/28 1464.45万, +156.84万, TODAY advancing 4 days shifted more items past 30-day threshold)
+  - 90d+ Debt = 288.71万 (vs 8/28 264.20万, +24.51万, same aging effect)
+  - Active sellers = 59 (HR 中西部大区合计, unchanged)
+  - Avg cycle = 63.2d (vs 8/28 63.5d, -0.3d)
+- Both repos fully synchronized with GitHub Pages.
 - All 8 steps ran successfully (Q1 6 scripts + Q2 1 script).
 - Q1 (20260513090923, branch=master): `9dcc18b` already at HEAD (committed earlier today at 10:03:30 with same data). Local regeneration produced identical content → no new commit. Push returned "Everything up-to-date".
 - Q2 (zhongxibu-dashboard, branch=main): `d207ddc` already at HEAD (committed earlier today at 10:04:35). TODAY in gen_q2_dashboard.py was already `2026-08-28` (no change needed). Local regen produced identical HTML → no new commit. Push returned "Everything up-to-date" (verified with --verbose: "[up to date] main -> main").
