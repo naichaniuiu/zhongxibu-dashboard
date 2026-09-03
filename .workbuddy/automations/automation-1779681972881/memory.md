@@ -38,3 +38,18 @@
   - Avg cycle = 63.5d (vs 8/26 63.3d, +0.2d)
 - HTTP validation: 1456.14万 overdue matches (TODAY-d.date.days>30) filter using 业绩日期 column. HR sheet validation: 部门dept rows sum=59, 中西部大区合计=59, script picks 合计=59.
 - Q2 HTML presented to user.
+
+## 2026-09-03 (Thu) 10:21
+- All 8 steps ran successfully (Q1 6 scripts + Q2 1 script).
+- Q1 (20260513090923, branch=master): 6 scripts ran. Committed `d14d720` (35 insertions, 18619 deletions in Q1 HTML). Pushed `a44721e..d14d720`. Q1 KPI unchanged: 26Q1=4305.6万, 25Q1=3835.63万, 欠款合计=3652.04万.
+- Q2 (zhongxibu-dashboard, branch=main): TODAY advanced `2026-09-02 → 2026-09-03`. Local HEAD `348a3da` already matched remote `348a3da` (no fetch/reset needed). Committed `6bf481a` (gen_q2_dashboard.py + index.html + 中西部大区26财年Q2数据看板_弹窗下钻版.html + .workbuddy/memory/2026-09-02.md). Pushed `348a3da..6bf481a`.
+- KPI (Q2, vs 9/02):
+  - 26Q2 actual = 1811.93 万 (estimated/scaled display = 6790.00 万)
+  - 25Q2 = 4780.23 万 (无 B 端列，全量求和)
+  - 总欠款 = 2369.83 万 (vs 9/02 2369.83, Excel 数据端 2026-09-01 持平)
+  - 逾期 (>30d) = 1488.49 万 (vs 9/02 1488.49, TODAY 推进 1 天但 Excel 截止未变)
+  - 90d+ 欠款 = 252.86 万 (vs 9/02 252.86)
+  - 在职销售 = 59 (HR 中西部大区合计，无变动)
+  - 平均回款周期 = 63.8 天 (vs 9/02 63.8)
+- Both repos fully synchronized with GitHub Pages.
+- Q2 HTML 已通过 present_files 同步给用户。
