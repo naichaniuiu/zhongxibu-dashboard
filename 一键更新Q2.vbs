@@ -16,7 +16,7 @@ WshShell.CurrentDirectory = strPath
 
 q = Chr(34)
 pythonPath = "C:\Users\wm881\.workbuddy\binaries\python\envs\default\Scripts\python.exe"
-gitExe = "C:\Users\wm881\.workbuddy\vendor\PortableGit\bin\git.exe"
+gitExe = "C:\Users\wm881\.workbuddy\binaries\PortableGit\versions\1.2.0\cmd\git.exe"
 logFilePath = strPath & "\update_log.txt"
 
 ' Step 1: Check Q2 data file
@@ -49,7 +49,7 @@ End If
 
 ' Step 3: Copy generated HTML to index.html
 Dim srcHtml, dstHtml
-srcHtml = "C:\Users\wm881\WorkBuddy\2026-07-07-10-45-23\中西部大区26财年Q2数据看板_弹窗下钻版.html"
+srcHtml = strPath & "\中西部大区26财年Q2数据看板_弹窗下钻版.html"
 dstHtml = strPath & "\index.html"
 If Not fso.FileExists(srcHtml) Then
     MsgBox "ERROR: Generated HTML not found!" & vbCrLf & vbCrLf & _
