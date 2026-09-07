@@ -39,6 +39,22 @@
 - HTTP validation: 1456.14万 overdue matches (TODAY-d.date.days>30) filter using 业绩日期 column. HR sheet validation: 部门dept rows sum=59, 中西部大区合计=59, script picks 合计=59.
 - Q2 HTML presented to user.
 
+## 2026-09-04 (Fri) 10:39
+- All 8 steps ran successfully (Q1 6 scripts + Q2 1 script).
+- Q1 (20260513090923, branch=master): 6 scripts ran. KPI unchanged: 26Q1=4305.6万, 25Q1=3835.63万, 欠款=3652.04万. HTML only differs in CRLF/LF (autocrlf=true), so `git diff` empty → no new commit, working tree clean. Branch synced with origin/master at 3d3517c.
+- Q2 (zhongxibu-dashboard, branch=main): TODAY already 2026-09-04. gen_q2_dashboard.py succeeded. New HTML identical (semantically) to existing HEAD c383bdb (CRLF vs LF only). No HTML commit needed. Memory file 2026-09-04.md added → commit 0f2e780, pushed c383bdb..0f2e780.
+- KPI (Q2, vs 9/03):
+  - 26Q2 actual = 1847.02 万 (estimated/scaled display = 6790.00 万, scale_factor=3.6762)
+  - 25Q2 = 4780.23 万 (no B-end column, full sum)
+  - Q2 Target = 6790.0 万 (Sheet4 dept sum, total row excluded)
+  - Completion = 27.2%
+  - Total debt = 2316.08 万 (vs 9/03 2369.83, -53.75 万)
+  - Overdue(>30d) = 1405.56 万 (vs 9/03 1488.49, -82.93 万)
+  - 90d+ Debt = 265.10 万 (vs 9/03 252.86, +12.24 万)
+  - Active sellers = 59 (HR 中西部大区合计)
+  - Avg cycle = 63.6d (vs 9/03 63.8, -0.2d, payment records 6639 all matched to 业绩日期)
+- Both repos fully synchronized with GitHub Pages.
+
 ## 2026-09-03 (Thu) 10:21
 - All 8 steps ran successfully (Q1 6 scripts + Q2 1 script).
 - Q1 (20260513090923, branch=master): 6 scripts ran. Committed `d14d720` (35 insertions, 18619 deletions in Q1 HTML). Pushed `a44721e..d14d720`. Q1 KPI unchanged: 26Q1=4305.6万, 25Q1=3835.63万, 欠款合计=3652.04万.
