@@ -1,5 +1,22 @@
 # Automation Execution Memory
 
+## 2026-09-07 (Mon) 10:01
+- All 8 steps ran successfully (Q1 6 scripts + Q2 1 script).
+- Q1 (20260513090923, branch=master): 6 scripts ran. Committed `c35d17d` (1 insertion, 10415 deletions in Q1 HTML). Pushed `516d081..c35d17d`. KPI unchanged: 26Q1=4305.6万, 25Q1=3835.63万, 欠款=3652.06万.
+- Q2 (zhongxibu-dashboard, branch=main): TODAY advanced `2026-09-04 → 2026-09-07`. Local HEAD `0f2e780` already matched remote `0f2e780` (no fetch/reset needed). gen_q2_dashboard.py succeeded. Committed `2c1dfcb` (gen_q2_dashboard.py + index.html + 中西部大区26财年Q2数据看板_弹窗下钻版.html + automation memory + 2026-09-07.md). Pushed `0f2e780..2c1dfcb`.
+- KPI (Q2, vs 9/04):
+  - 26Q2 actual = 1921.77 万 (estimated/scaled display = 6790.00 万, scale_factor=3.5332)
+  - 25Q2 = 4780.23 万 (无 B 端列，全量求和)
+  - Q2 Target = 6790.0 万
+  - Completion = 28.3%
+  - 总欠款 = 2323.60 万 (vs 9/04 2316.08, +7.52 万)
+  - 逾期 (>30d) = 1387.77 万 (vs 9/04 1405.56, -17.79 万，付款清理多于新增)
+  - 90d+ 欠款 = 247.43 万 (vs 9/04 265.10, -17.67 万)
+  - 在职销售 = 59 (HR 中西部大区合计)
+  - 平均回款周期 = 63.7 天 (vs 9/04 63.6, +0.1 天；认款 6668 条 100% 匹配)
+- Excel 数据端最大业绩日期 = 2026-09-06，文件 mtime = 2026-09-07 09:36。
+- 两个仓库均与 GitHub Pages 完全同步。Q2 HTML 已通过 present_files 同步给用户。
+
 ## 2026-09-01 (Tue) 10:01
 - All 8 steps ran successfully (Q1 6 scripts + Q2 1 script).
 - Q1 (20260513090923, branch=master): HTML updated with new drill data, committed `cf82df4`. Pushed `9dcc18b..cf82df4`. Q1 26Q1 total = 4305.6万, 25Q1 = 3835.63万.
