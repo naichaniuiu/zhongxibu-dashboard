@@ -2,12 +2,14 @@
 __pycache__/
 *.pyc
 
-# Temporary files
-update_log.txt
+# Local run logs (machine-specific; never commit)
+update_log*.txt
 *.tmp
 
 # OS files
 Thumbs.db
 .DS_Store
 debug.log
-debug.log
+
+# One-click update wrapper script (machine-specific paths)
+# Place auto_update.bat in project root, NOT here.
