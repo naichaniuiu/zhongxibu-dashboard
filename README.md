@@ -8,42 +8,74 @@
 
 ---
 
-## 每日更新方式
+## 数据更新方式（每日自动 + 手动兜底）
 
-### 方式一：WorkBuddy 自动更新（推荐）
+### 方式一：每日自动更新（推荐，无需操作）
 
-已设置每日定时自动更新，无需手动操作。WorkBuddy 会在每天指定时间自动：
+WorkBuddy 通过 **Windows 计划任务** 在每天早上 7:30 自动跑完整流程：
+
 1. 读取 `D:\业绩 欠款看板 Q2.xlsx`
-2. 运行 `gen_q2_dashboard.py` 生成看板 HTML
+2. 生成看板 JSON + HTML（含所有图表和交互）
 3. 推送到 GitHub Pages
 
-> 前提：电脑开机 + WorkBuddy 运行中 + Excel 文件已更新
+**前提条件**：
+- 电脑在 7:30 时处于开机状态（错过可手动触发 `schtasks /Run /TN ZhongxibuQ2DashboardUpdate`）
+- 已用当前 Windows 用户登录（SSH 密钥在 `%USERPROFILE%\.ssh\`）
 
-### 方式二：手动一键更新
+**查看日志**：每次运行在 `deploy\update_log_YYYYMMDD.txt` 留一份记录。
 
-1. 确保最新 Excel 文件在 `D:\业绩 欠款看板 Q2.xlsx`
-2. 打开此文件夹，**双击 `一键更新Q2.vbs`**
-3. 等待弹窗提示 **"Update Done"** → 点击确定
+**查看任务**：`schtasks /Query /TN ZhongxibuQ2DashboardUpdate /V`
 
 ---
 
-## 文件说明
+### 方式二：手动立即更新（紧急时使用）
 
-| 文件 | 说明 |
+如需立刻同步最新 Excel（例如领导临时要看数据）：
+
+1. 确保最新 Excel 文件在 `D:\业绩 欠款看板 Q2.xlsx`
+2. 在项目根目录双击 `auto_update.bat`
+   （路径：`C:\Users\1\WorkBuddy\2026-09-29-14-07-32\auto_update.bat`）
+3. 等待几秒，浏览器打开 https://naichaniuiu.github.io/zhongxibu-dashboard/ 查看
+
+---
+
+## Excel 文件路径
+
+**当前**：`D:\业绩 欠款看板 Q2.xlsx`
+
+如需修改，请告诉我新路径，我同步更新 `auto_update.bat`。
+
+---
+
+## 文件说明（项目仓库结构）
+
+| 路径 | 说明 |
 |------|------|
-| `index.html` | 看板页面（GitHub Pages 入口） |
-| `gen_q2_dashboard.py` | Q2 看板生成脚本（读取 Excel → 生成 HTML） |
-| `一键更新Q2.vbs` | Q2 一键更新脚本（双击运行） |
+| `deploy/index.html` | 看板页面（GitHub Pages 入口，已自包含 1MB） |
+| `deploy/README.md` | 本文件 |
+| `deploy/.gitignore` | 排除本机日志等 |
+
+> **不在本仓库**（每台机器专属，不上传）：
+> - `build_data.py` / `inject.py` / `dashboard_template.html` 等 Python 脚本
+> - `auto_update.bat`（含本机绝对路径，Windows 计划任务入口）
+> - `update_log_*.txt`（运行日志）
 
 ---
 
 ## 常见问题
 
-**Q：管理者无法打开链接？**
-A：检查链接是否为 `https://naichaniuiu.github.io/zhongxibu-dashboard/`
+**Q：管理者打不开链接？**
+A：确认链接是 `https://naichaniuiu.github.io/zhongxibu-dashboard/`
 
-**Q：自动更新没有执行？**
-A：确保电脑开机、WorkBuddy 运行中。如需手动更新，双击 `一键更新Q2.vbs`
+**Q：自动更新没执行？**
+A：
+1. `schtasks /Query /TN ZhongxibuQ2DashboardUpdate` 看任务状态
+2. 确认 7:30 时电脑开机且已登录
+3. 看 `deploy\update_log_YYYYMMDD.txt` 最近一次日志
+4. 手动触发：`schtasks /Run /TN ZhongxibuQ2DashboardUpdate`
 
-**Q：Excel 文件路径可以改吗？**
-A：目前固定为 `D:\业绩 欠款看板 Q2.xlsx`，如需修改请告诉我
+**Q：Excel 路径能改吗？**
+A：可以，但需要同步修改 `auto_update.bat` 里 `EXCEL` 那行
+
+**Q：定时任务能改时间吗？**
+A：可以，`schtasks /Change /TN ZhongxibuQ2DashboardUpdate /ST HH:MM`
