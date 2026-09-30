@@ -1,5 +1,6 @@
 @echo off
 chcp 936 > nul
+setlocal
 
 REM ============================================================
 REM  Zhongxibu Dashboard Q2 - One-Click Update + Auto Push to GitHub
@@ -7,20 +8,26 @@ REM  Double-click to: Read Excel -> Generate HTML -> Push to Pages
 REM  URL: https://naichaniuiu.github.io/zhongxibu-dashboard/
 REM ============================================================
 
-setlocal
-
 REM ==================== CONFIG ====================
-REM Data file (modify if Excel is in another location)
+REM 1) Excel data file (modify if it is in another location)
 set "EXCEL=%USERPROFILE%\Desktop\新建文件夹\业绩 欠款看板 Q2.xlsx"
 
-REM Python interpreter (WorkBuddy managed)
+REM 2) Python interpreter (WorkBuddy managed)
 set "PYTHON=C:\Users\%USERNAME%\.workbuddy\binaries\python\versions\3.13.12\python.exe"
+
+REM 3) Git (WorkBuddy bundles PortableGit, NOT in system PATH)
+set "GIT_HOME=C:\Users\%USERNAME%\.workbuddy\vendor\PortableGit"
 REM =================================================
 
 REM Detect paths relative to this .bat
 set "SELF_DIR=%~dp0"
 set "PROJECT_DIR=%SELF_DIR%.."
 set "LOG=%SELF_DIR%update_log.txt"
+
+REM ---- Make git / ssh available in this cmd session ----
+set "PATH=%GIT_HOME%\cmd;%PATH%"
+set "HOME=%USERPROFILE%"
+set "GIT_SSH_COMMAND=%GIT_HOME%\usr\bin\ssh.exe -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
 
 cd /d "%SELF_DIR%"
 
@@ -32,32 +39,61 @@ echo   Time: %date% %time%
 echo ============================================================
 echo.
 
+REM ---- Precheck: python & git ----
+if not exist "%PYTHON%" (
+    echo [ERROR] Python not found: "%PYTHON%" >> "%LOG%"
+    echo [X] FAILED: Python not found.
+    echo   Expected: %PYTHON%
+    echo   Please modify the CONFIG section in this .bat.
+    echo.
+    echo Press any key to close...
+    pause >nul
+    exit /b 1
+)
+
+git --version >> "%LOG%" 2>&1
+if errorlevel 1 (
+    echo [ERROR] git not found or not runnable. >> "%LOG%"
+    echo [X] FAILED: git command is unavailable.
+    echo   Expected at: %GIT_HOME%\cmd\git.exe
+    echo   Please install Git for Windows, or fix the GIT_HOME path in this .bat.
+    echo.
+    echo Press any key to close...
+    pause >nul
+    exit /b 1
+)
+
 REM ---- Step 0: Sync with remote (prevent non-fast-forward on push) ----
 echo [0/4] Syncing with GitHub remote...
 echo [0/4] Sync with remote... >> "%LOG%"
 git fetch origin main >> "%LOG%" 2>&1
-git reset --hard origin/main >> "%LOG%" 2>&1
-echo [0/4] Done.
+if errorlevel 1 (
+    echo [WARN] fetch failed (network?); continue anyway. >> "%LOG%"
+    echo [0/4] WARN: fetch failed, will continue.
+) else (
+    git reset --hard origin/main >> "%LOG%" 2>&1
+    echo [0/4] Done.
+)
 
 REM ---- Step 1: Check Excel ----
 if not exist "%EXCEL%" (
     echo [ERROR] Excel not found: "%EXCEL%" >> "%LOG%"
     echo [1/4] FAILED: Excel file not found!
     echo   Expected: %EXCEL%
-    echo   Please put it at the path above or modify CONFIG in this .bat.
+    echo   Please put it at the path above, or modify EXCEL in the CONFIG section.
     echo.
     echo Press any key to close...
     pause >nul
     exit /b 1
 )
-echo [1/4] Excel found: %EXCEL%
-echo [1/4] Excel found. >> "%LOG%"
+echo [1/4] Excel found.
+echo [1/4] Excel found: %EXCEL% >> "%LOG%"
 
 REM ---- Step 2: Build data ----
 echo.
 echo [2/4] Building data from Excel...
 echo [2/4] Building data... >> "%LOG%"
-"%PYTHON%" "%PROJECT_DIR%\build_data.py" >> "%LOG%" 2>&1
+"%PYTHON%" "%PROJECT_DIR%\build_data.py" "%EXCEL%" >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo [ERROR] build_data.py failed. >> "%LOG%"
     echo [2/4] FAILED: build_data.py error. See update_log.txt
@@ -128,7 +164,7 @@ if errorlevel 1 (
         git rebase --abort >> "%LOG%" 2>&1
         echo [ERROR] git push failed after retry. >> "%LOG%"
         echo [4/4] FAILED: git push.
-        echo   Possible causes: network, expired token, or repo permissions.
+        echo   Possible causes: no network, or SSH key not authorized on GitHub.
         echo   See update_log.txt for details.
         echo.
         echo Press any key to close...
