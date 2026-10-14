@@ -8,18 +8,18 @@
 
 ---
 
-## 数据更新方式（每日自动 + 手动兜底）
+## 数据更新方式（每周一至周五 10:00 自动 + 手动兜底）
 
-### 方式一：每日自动更新（推荐，无需操作）
+### 方式一：自动更新（推荐，无需操作）
 
-WorkBuddy 通过 **Windows 计划任务** 在每天早上 7:30 自动跑完整流程：
+WorkBuddy 通过 **Windows 计划任务** 在每个工作日 10:00 自动跑完整流程：
 
-1. 读取 `D:\业绩 欠款看板 Q2.xlsx`
+1. 读取 `D:\业绩 欠款看板 Q3.xlsx`（**当前季度**，下季度切换时改 build_data.py / auto_update.bat / 模板里所有 `Q3`）
 2. 生成看板 JSON + HTML（含所有图表和交互）
 3. 推送到 GitHub Pages
 
 **前提条件**：
-- 电脑在 7:30 时处于开机状态（错过可手动触发 `schtasks /Run /TN ZhongxibuQ2DashboardUpdate`）
+- 电脑在工作日 10:00 时处于开机状态（错过可手动触发 `schtasks /Run /TN ZhongxibuQ2DashboardUpdate`）
 - 已用当前 Windows 用户登录（SSH 密钥在 `%USERPROFILE%\.ssh\`）
 
 **查看日志**：每次运行在 `deploy\update_log_YYYYMMDD.txt` 留一份记录。
@@ -32,7 +32,7 @@ WorkBuddy 通过 **Windows 计划任务** 在每天早上 7:30 自动跑完整�
 
 如需立刻同步最新 Excel（例如领导临时要看数据）：
 
-1. 确保最新 Excel 文件在 `D:\业绩 欠款看板 Q2.xlsx`
+1. 确保最新 Excel 文件在 `D:\业绩 欠款看板 Q3.xlsx`
 2. 在项目根目录双击 `auto_update.bat`
    （路径：`C:\Users\1\WorkBuddy\2026-09-29-14-07-32\auto_update.bat`）
 3. 等待几秒，浏览器打开 https://naichaniuiu.github.io/zhongxibu-dashboard/ 查看
@@ -41,7 +41,7 @@ WorkBuddy 通过 **Windows 计划任务** 在每天早上 7:30 自动跑完整�
 
 ## Excel 文件路径
 
-**当前**：`D:\业绩 欠款看板 Q2.xlsx`
+**当前**：`D:\业绩 欠款看板 Q3.xlsx`
 
 如需修改，请告诉我新路径，我同步更新 `auto_update.bat`。
 
