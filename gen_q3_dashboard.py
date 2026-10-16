@@ -1755,6 +1755,23 @@ new Chart(document.getElementById('cycleChart'), {{
 </body>
 </html>'''
 
+# 内联 Chart.js 与 datalabels 插件（vendor 目录与脚本同目录），不依赖外部 CDN
+_vdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor')
+
+def _inline_js(filename):
+    _p = os.path.join(_vdir, filename)
+    with open(_p, 'r', encoding='utf-8') as _jf:
+        return '<script>\n' + _jf.read() + '\n</script>'
+
+html = html.replace(
+    '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>',
+    _inline_js('chart.umd.min.js'))
+html = html.replace(
+    '<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>',
+    _inline_js('chartjs-plugin-datalabels.min.js'))
+if 'cdn.jsdelivr.net' in html:
+    raise SystemExit('ERROR: JS 内联失败，HTML 中仍存在 CDN 引用')
+
 outpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), '中西部大区26财年Q3数据看板_弹窗下钻版.html')
 with open(outpath, 'w', encoding='utf-8') as f:
     f.write(html)
