@@ -440,6 +440,12 @@ for r in perf_records:
     if r.get('sub_dept'):
         s['sub_dept_list'].append(r['sub_dept'])
 
+# 用认款数据补充销售员的三级部门（部分销售员本季无核算B端业绩记录，业绩表取不到部门）
+cycle_sub_by_seller = defaultdict(Counter)
+for rec in cycle_records:
+    if rec.get('sub_dept'):
+        cycle_sub_by_seller[rec['seller']][rec['sub_dept']] += 1
+
 for r in debt_records:
     s = seller_data[r['seller_name']]
     s['total_debt'] += r['debt']
@@ -460,8 +466,9 @@ seller_sub_dept = {}
 for seller, s in seller_data.items():
     dept = s['dept']
     sub_dept = '其他'
-    if s['sub_dept_list']:
-        sub_dept = Counter(s['sub_dept_list']).most_common(1)[0][0]
+    if s['sub_dept_list'] or cycle_sub_by_seller.get(seller):
+        counter = Counter(s['sub_dept_list']) + cycle_sub_by_seller.get(seller, Counter())
+        sub_dept = counter.most_common(1)[0][0]
     seller_sub_dept[seller] = sub_dept
     sales_detail_data[dept].append({
         'name': seller,
@@ -826,9 +833,9 @@ for dept_name, sellers_map in customer_detail.items():
     for seller_name, custs in sellers_map.items():
         # 收集该销售员所有客户的 sub_dept，过滤无效值
         valid_sds = [c.get('sub_dept') for c in custs if c.get('sub_dept') and c.get('sub_dept') != '__pending__']
-        # 优先使用该销售员在业绩数据中的 sub_dept
+        # 优先使用该销售员在业绩/认款数据中的 sub_dept（无客户明细时也生效）
         perf_sd = seller_sub_dept.get(seller_name)
-        if perf_sd and perf_sd != '其他' and any(sd == perf_sd for sd in valid_sds):
+        if perf_sd and perf_sd != '其他':
             main_sd = perf_sd
         elif valid_sds:
             sd_counts = {}
