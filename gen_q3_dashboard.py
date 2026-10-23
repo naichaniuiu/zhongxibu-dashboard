@@ -14,7 +14,7 @@ from collections import defaultdict, Counter
 # ============================================================
 # 配置
 # ============================================================
-TODAY = datetime(2026, 10, 22)        # 数据基准日
+TODAY = datetime(2026, 10, 23)        # 数据基准日
 DATA_FILE = 'D:/业绩 欠款看板 Q3.xlsx'
 ESTIMATED_TOTAL = 4040.0             # 用户指定的Q3预估业绩（万元）
 
@@ -90,6 +90,19 @@ def load_rows(path, sheet_idx=0):
         yield dict(zip(headers, row))
     wb.close()
 
+def sheet_index_by_name(keyword, default=None):
+    """按关键字定位 sheet 索引（防止 Excel 中 sheet 顺序变动导致读错表）"""
+    wb = openpyxl.load_workbook(DATA_FILE, data_only=True, read_only=True)
+    for i, name in enumerate(wb.sheetnames):
+        if keyword in name:
+            wb.close()
+            return i
+    wb.close()
+    return default
+
+SHEET_DEBT = sheet_index_by_name('欠款')   # 欠款数据
+SHEET_PAY  = sheet_index_by_name('认款')   # 认款数据
+
 # ============================================================
 # 部门映射
 # ============================================================
@@ -153,7 +166,7 @@ def normalize_sub_dept(dept2, sub_dept, raw_dept2='', seller_name=''):
 # ============================================================
 print('Scanning internet sales sellers...')
 scan_internet_sellers(DATA_FILE, sheet_idx=1)
-scan_internet_sellers(DATA_FILE, sheet_idx=2)
+scan_internet_sellers(DATA_FILE, sheet_idx=SHEET_DEBT)
 print(f'  Internet sellers: {len(INTERNET_SELLERS)}')
 
 # ============================================================
@@ -242,7 +255,7 @@ print(f'  25Q3 performance records: {len(perf_records_25)}')
 # ============================================================
 print('Loading debt data...')
 debt_records = []
-for r in load_rows(DATA_FILE, sheet_idx=2):
+for r in load_rows(DATA_FILE, sheet_idx=SHEET_DEBT):
     d = parse_date(r.get('业绩日期'))
     raw_dept2 = str(r.get('二级部门') or '').strip().replace('\t', '')
     raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
@@ -288,8 +301,8 @@ for _si in [0, 1]:
             continue
         order_amount_map[on] += to_wan(r.get('业绩总金额'))
 
-# 从欠款表读取 欠款金额（Sheet2，全量读取不加过滤）
-for r in load_rows(DATA_FILE, sheet_idx=2):
+# 从欠款表读取 欠款金额（按名称定位，全量读取不加过滤）
+for r in load_rows(DATA_FILE, sheet_idx=SHEET_DEBT):
     on = str(r.get('业绩单号') or '').strip().replace('\t', '')
     if not on:
         continue
@@ -311,7 +324,7 @@ print('Loading payment data...')
 cycle_records = []
 # 回款金额按销售员聚合
 seller_collect = defaultdict(float)
-for r in load_rows(DATA_FILE, sheet_idx=3):
+for r in load_rows(DATA_FILE, sheet_idx=SHEET_PAY):
     if str(r.get('目标认款类型') or '').strip() != '业绩单认款':
         continue
     # 使用认款数据自有的部门信息，不依赖业绩数据映射
