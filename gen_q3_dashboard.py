@@ -14,7 +14,7 @@ from collections import defaultdict, Counter
 # ============================================================
 # 配置
 # ============================================================
-TODAY = datetime(2026, 10, 13)        # 数据基准日
+TODAY = datetime(2026, 10, 23)        # 数据基准日
 DATA_FILE = 'D:/业绩 欠款看板 Q3.xlsx'
 ESTIMATED_TOTAL = 4040.0             # 用户指定的Q3预估业绩（万元）
 
@@ -90,6 +90,19 @@ def load_rows(path, sheet_idx=0):
         yield dict(zip(headers, row))
     wb.close()
 
+def sheet_index_by_name(keyword, default=None):
+    """按关键字定位 sheet 索引（防止 Excel 中 sheet 顺序变动导致读错表）"""
+    wb = openpyxl.load_workbook(DATA_FILE, data_only=True, read_only=True)
+    for i, name in enumerate(wb.sheetnames):
+        if keyword in name:
+            wb.close()
+            return i
+    wb.close()
+    return default
+
+SHEET_DEBT = sheet_index_by_name('欠款')   # 欠款数据
+SHEET_PAY  = sheet_index_by_name('认款')   # 认款数据
+
 # ============================================================
 # 部门映射
 # ============================================================
@@ -153,7 +166,7 @@ def normalize_sub_dept(dept2, sub_dept, raw_dept2='', seller_name=''):
 # ============================================================
 print('Scanning internet sales sellers...')
 scan_internet_sellers(DATA_FILE, sheet_idx=1)
-scan_internet_sellers(DATA_FILE, sheet_idx=2)
+scan_internet_sellers(DATA_FILE, sheet_idx=SHEET_DEBT)
 print(f'  Internet sellers: {len(INTERNET_SELLERS)}')
 
 # ============================================================
@@ -242,7 +255,7 @@ print(f'  25Q3 performance records: {len(perf_records_25)}')
 # ============================================================
 print('Loading debt data...')
 debt_records = []
-for r in load_rows(DATA_FILE, sheet_idx=2):
+for r in load_rows(DATA_FILE, sheet_idx=SHEET_DEBT):
     d = parse_date(r.get('业绩日期'))
     raw_dept2 = str(r.get('二级部门') or '').strip().replace('\t', '')
     raw_sub_dept = str(r.get('三级部门') or '').strip().replace('\t', '')
@@ -288,8 +301,8 @@ for _si in [0, 1]:
             continue
         order_amount_map[on] += to_wan(r.get('业绩总金额'))
 
-# 从欠款表读取 欠款金额（Sheet2，全量读取不加过滤）
-for r in load_rows(DATA_FILE, sheet_idx=2):
+# 从欠款表读取 欠款金额（按名称定位，全量读取不加过滤）
+for r in load_rows(DATA_FILE, sheet_idx=SHEET_DEBT):
     on = str(r.get('业绩单号') or '').strip().replace('\t', '')
     if not on:
         continue
@@ -311,7 +324,7 @@ print('Loading payment data...')
 cycle_records = []
 # 回款金额按销售员聚合
 seller_collect = defaultdict(float)
-for r in load_rows(DATA_FILE, sheet_idx=3):
+for r in load_rows(DATA_FILE, sheet_idx=SHEET_PAY):
     if str(r.get('目标认款类型') or '').strip() != '业绩单认款':
         continue
     # 使用认款数据自有的部门信息，不依赖业绩数据映射
@@ -440,6 +453,12 @@ for r in perf_records:
     if r.get('sub_dept'):
         s['sub_dept_list'].append(r['sub_dept'])
 
+# 用认款数据补充销售员的三级部门（部分销售员本季无核算B端业绩记录，业绩表取不到部门）
+cycle_sub_by_seller = defaultdict(Counter)
+for rec in cycle_records:
+    if rec.get('sub_dept'):
+        cycle_sub_by_seller[rec['seller']][rec['sub_dept']] += 1
+
 for r in debt_records:
     s = seller_data[r['seller_name']]
     s['total_debt'] += r['debt']
@@ -460,8 +479,9 @@ seller_sub_dept = {}
 for seller, s in seller_data.items():
     dept = s['dept']
     sub_dept = '其他'
-    if s['sub_dept_list']:
-        sub_dept = Counter(s['sub_dept_list']).most_common(1)[0][0]
+    if s['sub_dept_list'] or cycle_sub_by_seller.get(seller):
+        counter = Counter(s['sub_dept_list']) + cycle_sub_by_seller.get(seller, Counter())
+        sub_dept = counter.most_common(1)[0][0]
     seller_sub_dept[seller] = sub_dept
     sales_detail_data[dept].append({
         'name': seller,
@@ -826,9 +846,9 @@ for dept_name, sellers_map in customer_detail.items():
     for seller_name, custs in sellers_map.items():
         # 收集该销售员所有客户的 sub_dept，过滤无效值
         valid_sds = [c.get('sub_dept') for c in custs if c.get('sub_dept') and c.get('sub_dept') != '__pending__']
-        # 优先使用该销售员在业绩数据中的 sub_dept
+        # 优先使用该销售员在业绩/认款数据中的 sub_dept（无客户明细时也生效）
         perf_sd = seller_sub_dept.get(seller_name)
-        if perf_sd and perf_sd != '其他' and any(sd == perf_sd for sd in valid_sds):
+        if perf_sd and perf_sd != '其他':
             main_sd = perf_sd
         elif valid_sds:
             sd_counts = {}
@@ -1754,6 +1774,23 @@ new Chart(document.getElementById('cycleChart'), {{
 </script>
 </body>
 </html>'''
+
+# 内联 Chart.js 与 datalabels 插件（vendor 目录与脚本同目录），不依赖外部 CDN
+_vdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor')
+
+def _inline_js(filename):
+    _p = os.path.join(_vdir, filename)
+    with open(_p, 'r', encoding='utf-8') as _jf:
+        return '<script>\n' + _jf.read() + '\n</script>'
+
+html = html.replace(
+    '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>',
+    _inline_js('chart.umd.min.js'))
+html = html.replace(
+    '<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>',
+    _inline_js('chartjs-plugin-datalabels.min.js'))
+if 'cdn.jsdelivr.net' in html:
+    raise SystemExit('ERROR: JS 内联失败，HTML 中仍存在 CDN 引用')
 
 outpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), '中西部大区26财年Q3数据看板_弹窗下钻版.html')
 with open(outpath, 'w', encoding='utf-8') as f:
