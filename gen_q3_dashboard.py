@@ -14,7 +14,7 @@ from collections import defaultdict, Counter
 # ============================================================
 # 配置
 # ============================================================
-TODAY = datetime(2026, 10, 26)        # 数据基准日
+TODAY = datetime(2026, 10, 27)        # 数据基准日
 DATA_FILE = 'D:/业绩 欠款看板 Q3.xlsx'
 ESTIMATED_TOTAL = 4040.0             # 用户指定的Q3预估业绩（万元）
 
