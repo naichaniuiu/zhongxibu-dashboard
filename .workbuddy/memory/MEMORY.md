@@ -1,4 +1,4 @@
-# 项目长期记忆 - 中西部大区销售看板 (Q2)
+# 项目长期记忆 - 中西部大区销售看板 (Q2/Q3)
 
 ## 数据口径（2026-08-26 更新）
 - **业绩**：只统计"是否核算B端业绩=是"；**包含离职销售员**（2026-08-26 用户确认，此前剔除）
@@ -11,10 +11,13 @@
 
 ## 项目结构
 - 仓库：naichaniuiu/zhongxibu-dashboard，主分支 main，GitHub Pages: https://naichaniuiu.github.io/zhongxibu-dashboard/
-- 数据源：D:/业绩 欠款看板 Q2.xlsx（6个sheet: 25Q2业绩/26Q2业绩/欠款数据/认款数据/目标拆分/在职销售人数）
-- 核心脚本：gen_q2_dashboard.py（Excel → HTML），输出 中西部大区26财年Q2数据看板_弹窗下钻版.html → 覆盖 index.html
+- Q3 数据源：D:/业绩 欠款看板 Q3.xlsx；Q2 数据源：D:/业绩 欠款看板 Q2.xlsx（6个sheet）
+- 核心脚本：gen_q3_dashboard.py（Q3，TODAY 硬编码在脚本第17行需每日更新）、gen_q2_dashboard.py（Q2）
+- 流程：跑脚本生成 中西部大区26财年Q3数据看板_弹窗下钻版.html → 覆盖 index.html → commit → push
 - 推送命令：CRED=$(head -1 ~/.git-credentials); GIT_TERMINAL_PROMPT=0 git -c credential.helper= push "${CRED}/naichaniuiu/zhongxibu-dashboard.git" main
   （必须加 -c credential.helper= 防止 GCM 挂起）
+- Python 路径：C:/Users/wm881/.workbuddy/binaries/python/versions/3.13.12/python（本机无 envs/default venv）
+- Pages 构建约 75 秒后生效，可用 curl 抓 ?v=时间戳 并 cmp 与本地 index.html 校验
 - Q1 看板在 C:\Users\wm881\WorkBuddy\20260513090923，主分支 master，仓库 naichaniuiu/sales-dashboard
 
 ## 用户偏好
