@@ -14,7 +14,7 @@ from collections import defaultdict, Counter
 # ============================================================
 # 配置
 # ============================================================
-TODAY = datetime(2026, 11, 9)         # 数据基准日
+TODAY = datetime(2026, 11, 16)         # 数据基准日
 DATA_FILE = 'D:/业绩 欠款看板 Q3.xlsx'
 ESTIMATED_TOTAL = 4040.0             # 用户指定的Q3预估业绩（万元）
 
@@ -1795,5 +1795,9 @@ if 'cdn.jsdelivr.net' in html:
 outpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), '中西部大区26财年Q3数据看板_弹窗下钻版.html')
 with open(outpath, 'w', encoding='utf-8') as f:
     f.write(html)
+import shutil
+idxpath = os.path.join(os.path.dirname(outpath), 'index.html')
+shutil.copyfile(outpath, idxpath)
 print(f"\nDone: {outpath}")
+print(f"Copied to: {idxpath}")
 print(f"Size: {len(html.encode('utf-8'))/1024:.1f} KB")
